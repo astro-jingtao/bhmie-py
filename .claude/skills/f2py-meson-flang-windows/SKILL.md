@@ -1,0 +1,146 @@
+---
+name: f2py-meson-flang-windows
+description: Build Python Fortran extension modules on Windows with f2py, meson-python and conda-forge flang (LLVM Flang). Use when creating or repairing a pyproject/meson setup that wraps Fortran for Python on Windows, when a conda env needs a Fortran compiler for f2py, or when a build fails with flang/MSVC errors such as "LNK1104 flang_rt.runtime", "LNK1104 libcmt.lib", "Unknown linker(s): ar/gar", "LNK2001 unresolved external symbol <sub>_", or "ascii codec can't decode byte" from crackfortran.
+---
+
+# f2py + meson + flang on Windows
+
+## Role
+
+You are a build engineer for Python packages that compile Fortran on
+Windows via f2py + meson-python, using conda-forge flang (LLVM Flang) and
+the MSVC toolchain. Your job is to:
+
+1. Provision a working build environment (conda packages + VS BuildTools).
+2. Write a correct build script and root `meson.build`.
+3. Diagnose the characteristic link/parse failures and apply the known fix.
+
+Working progression:
+
+```text
+env setup → build script → meson.build wiring → build + test → troubleshoot
+```
+
+---
+
+# Hard Rules
+
+## R1 — Build-script environment setup goes in a `.bat` file, never a one-line `cmd /c '...'` chain
+
+A single `cmd /c 'call vcvarsall.bat x64 && set LIB=%LIB%;<dir> && pip
+install -e .'` expands `%LIB%` when the line is parsed — before vcvarsall
+has run — silently replacing it with an empty prefix, which later surfaces
+as `LNK1104: libcmt.lib`. A `.bat` file expands per-line at execution time.
+(If a one-liner is unavoidable, use delayed expansion `!VAR!` with
+`cmd /v:on`.)
+
+## R2 — Every Fortran file containing subroutine implementations must be listed as a `py.extension_module` source
+
+Files passed only to the f2py `custom_target` are parsed for signatures but
+never compiled — their symbols will be missing at link time
+(`LNK2001: unresolved external symbol <name>_`), even though the symbols
+flang emits look correct.
+
+## R3 — The f2py `custom_target` is declared in the ROOT `meson.build`
+
+f2py writes its generated files to the working directory (the build root),
+while meson resolves declared outputs relative to the declaring
+meson.build's build subdir. Declaring it in a nested meson.build fails with
+`FileNotFoundError: <path>\<m>-f2pywrappers.f`.
+
+## R4 — Fortran sources fed to f2py must be pure ASCII
+
+f2py's crackfortran reads sources as ASCII; a UTF-8 em-dash or `©` in a
+comment aborts with `'ascii' codec can't decode byte 0xe2`. Use `--` and
+`(c)`.
+
+---
+
+# Environment Setup (once per machine / env)
+
+```text
+conda create -n <env> -c conda-forge python=3.12 numpy meson-python ninja pytest pip flang
+conda install -n <env> -c conda-forge flang-rt_win-64
+```
+
+Key facts (LLVM Flang 21–23, conda-forge win-64):
+
+- `fortran_metapackage` does **not** exist on win-64; the compiler package
+  is `flang`.
+- The flang runtime is a **separate package** `flang-rt_win-64`. Without it,
+  linking fails with `LNK1104: flang_rt.runtime.static.lib`.
+- The env ships **no DLL** for the dynamic runtime, so Fortran must be
+  compiled against the static runtime: `FFLAGS=-static-libflangrt`.
+- C compiler: VS BuildTools `cl` via `vcvarsall.bat x64` (meson needs a C
+  compiler for f2py's generated glue; flang uses the MSVC linker).
+- flang on the windows-msvc target already emits gfortran-style `name_`
+  symbols, matching f2py's generated C calls — `-funderscoring` is NOT
+  needed (verify with `llvm-nm` on a compiled object before suspecting
+  symbol mangling).
+
+# Build Script
+
+Copy `templates/dev-install.cmd`, adapt three paths (vcvarsall location,
+conda root, env name). It sets everything the toolchain cannot discover:
+
+| Variable | Value | Why |
+| --- | --- | --- |
+| `AR` / `RANLIB` | `llvm-ar` / `llvm-ranlib` | meson probes for `ar`/`gar`; the env only ships `llvm-*` |
+| `LIB` | append `<resource-dir>\lib\x86_64-pc-windows-msvc` | link.exe must find `flang_rt.runtime.*.lib`; resource dir = `flang-new --print-resource-dir` |
+| `FFLAGS` | `-static-libflangrt` | no dynamic-runtime DLL exists in the env |
+
+# meson.build Wiring
+
+Copy `templates/meson.build.txt` as the project root `meson.build`. Its
+load-bearing details:
+
+- `custom_target` runs `python -m numpy.f2py <wrapper.f90> -m <ext>` and
+  declares the **exact** generated filenames. For bare (non-module)
+  subroutines f2py generates `<ext>module.c` + `<ext>-f2pywrappers.f` (the
+  wrapper file is written even when empty). `-f2pywrappers2.f90` appears
+  only for Fortran-module subroutines. When unsure, probe:
+  `python -m numpy.f2py <file>.f90 -m <ext>` in a scratch dir and list what
+  appeared.
+- `py.extension_module` sources = generated files + the wrapper `.f90`
+  itself (see R2) + other implementation Fortran + `fortranobject.c` from
+  `numpy.f2py.get_include()`, with numpy + f2py include dirs.
+- Pure-Python package files are installed explicitly via
+  `py.install_sources(..., subdir: '<pkg>')` — meson installs only what is
+  declared.
+
+# Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `PackagesNotFoundError: fortran_metapackage` | wrong package name on win-64 | install `flang` |
+| `LNK1104: flang_rt.runtime.static.lib` | runtime package missing | `conda install flang-rt_win-64` |
+| `LNK1104: flang_rt.runtime.dynamic.lib` (final link) | resource dir not on `LIB` | append it (build script) |
+| `.pyd` builds but fails to load | linked against dynamic runtime, no DLL ships | `FFLAGS=-static-libflangrt` |
+| `Unknown linker(s): [['ar'], ['gar']]` | meson static-linker probe | `AR=llvm-ar RANLIB=llvm-ranlib` |
+| `LNK1104: libcmt.lib` (sanity check) | `LIB` clobbered by parse-time `%LIB%` expansion | R1: use a `.bat` |
+| `FileNotFoundError: <...>-f2pywrappers.f` | custom_target in nested meson.build | R3: move to root |
+| `'ascii' codec can't decode byte ...` in crackfortran | non-ASCII chars in Fortran | R4: pure ASCII |
+| `LNK2001: unresolved external symbol <sub>_` | implementation file only given to f2py, not compiled | R2: add to extension sources |
+| `Successfully installed` but `import` fails on missing symbol | stale `build/` dir from earlier attempt | delete `build/`, rebuild |
+
+---
+
+# Out of Scope
+
+- Linux/macOS builds (gfortran there; none of these workarounds apply).
+- setuptools / numpy.distutils legacy builds (deprecated path).
+- Producing distributable wheels / cibuildwheel / CI matrices — the recipe
+  here is for local dev installs (`pip install -e . --no-build-isolation`).
+- Intel oneAPI (ifx) or MSYS2 gfortran toolchains — fallbacks if flang
+  fails, not covered here.
+
+---
+
+# Supporting Files
+
+- `templates/dev-install.cmd` — the one-shot build script; copy, adapt the
+  three paths, run from the repo root. The header comment documents each
+  environment tweak.
+- `templates/meson.build.txt` — root meson.build pattern for an f2py
+  extension inside a `src/`-layout package; copy and rename the extension
+  and sources.

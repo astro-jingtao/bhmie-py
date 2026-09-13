@@ -1,0 +1,32 @@
+[build-system]
+requires = ["meson-python>=0.16", "numpy>=2.0"]
+build-backend = "mesonpy"
+
+[project]
+name = "bhmiepy"
+version = "0.1.0"
+description = "Python interface to the BHMie Mie scattering code"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Tao Jing", email = "tao.jing.astro@gmail.com" }]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26"]
+keywords = ["mie", "scattering", "astronomy", "dust", "fortran", "f2py"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Fortran",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.urls]
+Upstream-bhmie = "https://github.com/hyperion-rt/bhmie"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

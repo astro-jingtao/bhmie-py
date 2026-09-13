@@ -1,0 +1,63 @@
+# Root meson.build pattern for a f2py extension in a src-layout package.
+# Adapt: project name/version, package name, extension name, source files.
+#
+# Load-bearing details (do not "fix" these without re-reading the skill):
+# - The custom_target MUST stay in the ROOT meson.build: f2py writes its
+#   outputs to the working directory (build root), meson resolves declared
+#   outputs relative to the declaring meson.build's build subdir.
+# - For bare (non-module) Fortran subroutines f2py generates
+#   <ext>module.c + <ext>-f2pywrappers.f (written even when empty);
+#   -f2pywrappers2.f90 appears only for Fortran-module subroutines.
+#   Probe in a scratch dir when unsure:
+#     python -m numpy.f2py wrapper.f90 -m _ext
+# - The wrapper .f90 and every other implementation-bearing Fortran file
+#   MUST also be listed as extension_module sources: files only passed to
+#   the custom_target are parsed for signatures but never compiled.
+
+project('<pkg>', 'c', 'fortran',
+  version : '0.1.0',
+  meson_version : '>=1.1.0',
+  default_options : ['buildtype=release', 'c_std=c99'])
+
+py_mod = import('python')
+py = py_mod.find_installation(pure: false)
+py_dep = py.dependency()
+
+incdir_numpy = run_command(py,
+  ['-c', 'import numpy; print(numpy.get_include())'],
+  check : true
+).stdout().strip()
+
+incdir_f2py = run_command(py,
+  ['-c', 'import numpy.f2py; print(numpy.f2py.get_include())'],
+  check : true
+).stdout().strip()
+
+inc_np = include_directories(incdir_numpy, incdir_f2py)
+
+# Pure-Python package files: meson installs only what is declared.
+py.install_sources(
+  'src/<pkg>/__init__.py',
+  subdir : '<pkg>',
+)
+
+fortran_sources = files(
+  'src/<pkg>/_fortran/<wrapper>.f90',   # parsed by f2py AND compiled (R2)
+  # ...other implementation Fortran...
+)
+
+f2py_ext_sources = custom_target('<pkg>-ext-f2py',
+  input : ['src/<pkg>/_fortran/<wrapper>.f90'],
+  output : ['_<ext>module.c', '_<ext>-f2pywrappers.f'],
+  command : [py, '-m', 'numpy.f2py', '@INPUT@', '-m', '_<ext>'],
+)
+
+py.extension_module('_<ext>',
+  f2py_ext_sources,
+  fortran_sources,
+  incdir_f2py / 'fortranobject.c',
+  include_directories : inc_np,
+  dependencies : py_dep,
+  install : true,
+  subdir : '<pkg>',
+)

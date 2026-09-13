@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Personal notes (kept local on purpose)
+.my_note/
+
+# Build artifacts
+build/
+builddir/
+dist/
+.mesonpy-*/
+*.mod
+
+# Test / tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
