@@ -83,15 +83,19 @@ subroutine bhmie_vec_ang(n, x, m, nang, angles, qext, qsca, qback, g, s1, s2)
 
 end subroutine bhmie_vec_ang
 
-subroutine bhmie_f77_ref(x, refrel, nang, qext, qsca, qback, gsca, s1, s2)
+subroutine bhmie_f77_ref(x, refrel, nang, qext, qsca, qback, gsca, s1, s2, ierr)
 
   ! Scalar reference computation through the ORIGINAL fixed-form F77
   ! BHMIE (bhmie_f77.f, Bohren & Huffman 1983 App. A / Draine). Its
   ! Fortran interface is single precision, so values are converted on the
   ! way in and out. Used by the test suite as an independent oracle for
   ! the double-precision port; kept in the extension so it can also be
-  ! used interactively to cross-check results. Requires nang <= 1000
-  ! (MXNANG in the F77 source).
+  ! used interactively to cross-check results.
+  !
+  ! ierr = 0 on success; 1 if nang is outside [2, 1000] (MXNANG); 2 if the
+  ! Mie series order exceeds the F77 NMXX = 150000. The F77 routine would
+  ! otherwise STOP and kill the whole Python process, so callers MUST
+  ! check ierr.
 
   implicit none
 
@@ -100,10 +104,41 @@ subroutine bhmie_f77_ref(x, refrel, nang, qext, qsca, qback, gsca, s1, s2)
   double complex, intent(in) :: refrel
   double precision, intent(out) :: qext, qsca, qback, gsca
   double complex, intent(out) :: s1(2*nang-1), s2(2*nang-1)
+  integer, intent(out) :: ierr
 
   real :: xr, qextr, qscar, qbackr, gscar
   complex :: refrelr, s1r(2*nang-1), s2r(2*nang-1)
-  integer :: j
+  double precision :: xstop, nmx_d
+  integer :: j, nmx
+
+  ierr = 0
+
+  if(nang < 2 .or. nang > 1000) then
+     ierr = 1
+     qext = 0.d0
+     qsca = 0.d0
+     qback = 0.d0
+     gsca = 0.d0
+     s1 = (0.d0, 0.d0)
+     s2 = (0.d0, 0.d0)
+     return
+  end if
+
+  ! mirror of the F77 series-order check (single-precision routine,
+  ! NMXX = 150000 there)
+  xstop = x + 4.d0*x**0.3333d0 + 2.d0
+  nmx_d = max(xstop, abs(refrel)*x) + 15.d0
+  nmx = nint(nmx_d)
+  if(nmx > 150000) then
+     ierr = 2
+     qext = 0.d0
+     qsca = 0.d0
+     qback = 0.d0
+     gsca = 0.d0
+     s1 = (0.d0, 0.d0)
+     s2 = (0.d0, 0.d0)
+     return
+  end if
 
   xr = real(x)
   refrelr = cmplx(refrel)

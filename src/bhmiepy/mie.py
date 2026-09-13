@@ -21,6 +21,12 @@ from . import _bhmiepy_ext
 # process -- so the limit is enforced here, before the call.
 _NMXX = 1_000_000
 
+# The Fortran routine keeps five nang-sized automatic arrays (amu, pi, pi0,
+# pi1, tau) that flang places on the stack (see the bhmie_f77.f header note
+# for the same behavior); beyond this nang the default 1 MB Windows stack
+# overflows. Generous relative to upstream's own MXNANG = 1000.
+_NANG_MAX = 10_000
+
 
 @dataclass
 class MieResult:
@@ -65,7 +71,7 @@ class MieResult:
         return self.qsca / self.qext
 
 
-def _validate_inputs(x_arr: np.ndarray, m_arr: np.ndarray, nang: int) -> None:
+def _validate_inputs(x_arr: np.ndarray, m_arr: np.ndarray) -> None:
     if not np.all(np.isfinite(x_arr)):
         raise ValueError("x contains non-finite values")
     if not np.all(np.isfinite(m_arr)):
@@ -80,14 +86,17 @@ def _check_series_order(x_b: np.ndarray, m_b: np.ndarray) -> None:
     """Reject inputs whose Mie series order would exceed the Fortran limit.
 
     Mirrors the upstream computation ``nmx = nint(max(x + 4*x**(1/3) + 2,
-    |m|*x)) + 15``; the routine would otherwise abort the process.
+    |m|*x)) + 15``; the routine would otherwise abort the process. The
+    comparison stays in float64 on purpose: casting to int64 first would
+    wrap around for x beyond ~9.2e18 and silently bypass the guard.
     """
     xstop = x_b + 4.0 * x_b ** (1.0 / 3.0) + 2.0
-    nmx = np.round(np.maximum(xstop, np.abs(m_b) * x_b)).astype(np.int64) + 15
-    if np.any(nmx > _NMXX):
-        i = int(np.argmax(nmx))
+    nmx = np.round(np.maximum(xstop, np.abs(m_b) * x_b)) + 15.0
+    bad = nmx > _NMXX
+    if np.any(bad):
+        i = int(np.argmax(bad))
         raise ValueError(
-            f"size parameter too large: series order nmx = {nmx.flat[i]} "
+            f"size parameter too large: series order nmx = {nmx.flat[i]:.6g} "
             f"exceeds the Fortran limit nmxx = {_NMXX} "
             f"(at x = {x_b.flat[i]}, m = {m_b.flat[i]})"
         )
@@ -125,10 +134,15 @@ def bhmie(x, m, nang: int = 90) -> MieResult:
     nang = operator.index(nang)
     if nang < 2:
         raise ValueError(f"nang must be >= 2 (got {nang})")
+    if nang > _NANG_MAX:
+        raise ValueError(
+            f"nang must be <= {_NANG_MAX} (got {nang}): larger values "
+            "overflow the stack of the Fortran routine's automatic arrays"
+        )
 
     x_arr = np.asarray(x, dtype=np.float64)
     m_arr = np.asarray(m, dtype=np.complex128)
-    _validate_inputs(x_arr, m_arr, nang)
+    _validate_inputs(x_arr, m_arr)
 
     x_b, m_b = np.broadcast_arrays(x_arr, m_arr)
     _check_series_order(x_b, m_b)

@@ -73,7 +73,7 @@ res.albedo, res.g, res.s11, res.s12, res.s33, res.s34, res.angles
 Validated against the upstream reference outputs shipped in
 `bhmie/examples/` (mrn77 and kmh94_full): all quantities agree to better
 than the reference files' 5-significant-digit precision (~5e-5 relative).
-Those full-fidelity runs take ~1 min each and live under the `slow` pytest
+Those full-fidelity runs take ~30 s each and live under the `slow` pytest
 marker (`pytest -m slow`).
 
 ## Installation (development, Windows)

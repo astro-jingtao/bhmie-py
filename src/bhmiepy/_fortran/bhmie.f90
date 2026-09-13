@@ -6,12 +6,16 @@
 ! top-level bhmie/ directory of the bhmiepy repository for reference and
 ! testing.
 !
-! Modifications for bhmiepy (relative to the upstream file): appended two
-! bare external subroutines (bhmie_core, bhmie_core_ang) below "end module"
-! as explicit-shape, F77-convention bridges so that f2py-wrapped code
-! (bhmiepy_ext.f90) can call the module routine through stable external
-! symbols, with and without a custom angle grid. The module itself is
-! unchanged.
+! Modifications for bhmiepy (relative to the upstream file):
+!  1. appended two bare external subroutines (bhmie_core, bhmie_core_ang)
+!     below "end module" as explicit-shape, F77-convention bridges so that
+!     f2py-wrapped code (bhmiepy_ext.f90) can call the module routine
+!     through stable external symbols, with and without a custom angle
+!     grid;
+!  2. inside subroutine bhmie, the workspace is allocated as d(nmx) (after
+!     the nmx > nmxx check) instead of the upstream d(nmxx) -- only
+!     d(1:nmx) is used, and the 16 MB full-size allocation per call
+!     dominated batched-use runtime. Results are bit-identical.
 !
 ! ---------------------------------------------------------------------------
 ! Original copyright notice and license (BSD 2-Clause):
@@ -82,7 +86,10 @@ contains
     complex(dp) :: an,an1,bn,bn1,drefrl,xi,xi1,y
 
     complex(dp),allocatable,dimension(:) :: d
-    allocate(d(nmxx))
+    ! bhmiepy note: allocated as d(nmx) further below (after the nmx > nmxx
+    ! check) instead of the upstream d(nmxx): only d(1:nmx) is ever used,
+    ! and allocating the full nmxx = 1e6 complex array (16 MB) per call
+    ! dominates runtime in batched use. Results are bit-identical.
 
     !***********************************************************************
     !
@@ -212,6 +219,8 @@ contains
        write(0,*)'error: nmx > nmxx=',nmxx,' for |m|x=',ymod
        stop
     endif
+
+    allocate(d(nmx))
 
     !*** Require NANG.GE.1 in order to calculate scattering intensities
 

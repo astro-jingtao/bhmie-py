@@ -67,6 +67,9 @@ def interp1d_loglog(x: np.ndarray, y: np.ndarray, v) -> np.ndarray:
             f"interpolation out of bounds: values in [{vs.min()}, {vs.max()}] "
             f"outside tabulated [{lo}, {hi}]"
         )
+    if x.size == 1:
+        # single-row table: the range check above pins v to the only point
+        return np.full_like(vs, y[0]).reshape(np.shape(v)) if np.ndim(v) else y[0]
     out = np.empty_like(vs)
     for k, vk in enumerate(vs):
         i = locate(x, vk)
@@ -148,5 +151,12 @@ def integral_loglog_subset(x: np.ndarray, y: np.ndarray, a1: float, a2: float) -
 
 def logspace(wmin: float, wmax: float, n: int) -> np.ndarray:
     """10**linspace(log10(wmin), log10(wmax), n), matching upstream
-    logspace(wav_min, wav_max, wavelengths) in main.f90."""
+    logspace(wav_min, wav_max, wavelengths) in main.f90, including its
+    guard: n == 1 with wmin != wmax is rejected loudly instead of silently
+    collapsing the grid to [wmin]."""
+    if n == 1 and wmin != wmax:
+        raise ValueError(
+            f"cannot build a 1-point log grid with wmin != wmax "
+            f"({wmin} != {wmax}) -- likely a misconfigured wavelength range"
+        )
     return 10.0 ** np.linspace(np.log10(wmin), np.log10(wmax), n)

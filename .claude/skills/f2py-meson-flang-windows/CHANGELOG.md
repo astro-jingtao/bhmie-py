@@ -87,3 +87,26 @@ knowledge candidates motivated it. Format: skill-forge
     scope: passed
     provenance: passed
 ```
+
+```yaml
+- date: 2026-09-13
+  action: update
+  skill_name: f2py-meson-flang-windows
+  scope: project
+  path: .claude/skills/f2py-meson-flang-windows/
+  source_candidates:
+    - KC-20260913-001
+  derived_from: []
+  changes:
+    - "new Hard Rule R7 from the code-review round: guard EVERY exported
+      entry into process-fatal (stop-based) Fortran, or return ierr;
+      port guard formulas comparing in float64 before int casts (int64
+      wraparound at ~9.2e18 bypasses checks); preserve comparison
+      polarity for NaN semantics ('if not (w > 0)' not 'if w <= 0')"
+  authorization: ""
+  validation:
+    frontmatter: passed
+    structure: passed
+    scope: passed
+    provenance: passed
+```

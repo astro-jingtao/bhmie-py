@@ -62,6 +62,13 @@ class TestLoglogPort:
             logspace(0.01, 1000.0, 250), np.logspace(np.log10(0.01), np.log10(1000.0), 250)
         )
 
+    def test_logspace_single_point_guard(self):
+        # regression: fortranlib's logspace stops loudly on n=1 with
+        # wmin /= wmax; the port used to silently return [wmin]
+        with pytest.raises(ValueError, match="1-point log grid"):
+            logspace(0.01, 1000.0, 1)
+        np.testing.assert_allclose(logspace(2.0, 2.0, 1), [2.0])
+
 
 class TestDistributions:
     def test_power_law_weights(self):
@@ -83,10 +90,52 @@ class TestDistributions:
         d = dust._make_distribution(dust.PowerLaw(0.005, 1.0, -3.5))
         a = np.logspace(np.log10(0.005), 0.0, 2_000_001)
         n = a**-3.5
-        want = (
-            np.trapezoid(4.0 / 3.0 * 3.1415926 * a**3 * n, a) / np.trapezoid(n, a)
-        )
+
+        def trapz(f, x):
+            # plain trapezoid, no numpy-version-dependent API
+            return np.sum(0.5 * (f[1:] + f[:-1]) * (x[1:] - x[:-1]))
+
+        want = trapz(4.0 / 3.0 * 3.1415926 * a**3 * n, a) / trapz(n, a)
         np.testing.assert_allclose(d.average_volume(), want, rtol=1e-4)
+
+    def test_descending_table_is_flipped(self):
+        # regression: descending tables used to pass validation but yield
+        # zero weight for every bin (subset integral assumes ascending)
+        d = dust._make_distribution(
+            dust.TableDistribution(a=np.array([10.0, 1.0, 0.1]), n=np.array([1.0, 1.0, 1.0]))
+        )
+        assert d.weight_number(0.1, 10.0) == pytest.approx(1.0, abs=1e-12)
+        assert 0.0 < d.weight_number(0.2, 0.5) < 1.0
+
+    def test_table_with_duplicate_sizes_accepted(self):
+        d = dust._make_distribution(
+            dust.TableDistribution(a=np.array([0.01, 0.01, 0.02]), n=np.array([1.0, 2.0, 3.0]))
+        )
+        assert d.weight_number(0.01, 0.02) == pytest.approx(1.0, abs=1e-12)
+
+    def test_unsorted_table_rejected(self):
+        with pytest.raises(ValueError, match="sorted"):
+            dust._make_distribution(
+                dust.TableDistribution(a=np.array([1.0, 0.5, 2.0]), n=np.ones(3))
+            )
+
+    def test_nan_table_rejected(self):
+        # regression: NaN rows slipped past the 'n < 0' check and later
+        # poisoned every accumulated output
+        with pytest.raises(ValueError, match="non-finite"):
+            dust._make_distribution(
+                dust.TableDistribution(a=np.array([0.1, 1.0]), n=np.array([1.0, np.nan]))
+            )
+
+    def test_zero_integral_distribution_rejected(self):
+        # regression: degenerate PeakedPowerLaw (aturn <= 0 -> n identically
+        # zero -> 0/0 normalization) used to produce all-NaN results
+        with pytest.raises(ValueError, match="aturn > 0"):
+            dust._make_distribution(dust.PeakedPowerLaw(0.005, 0.0, -3.5))
+        with pytest.raises(ValueError, match="total integral"):
+            dust._make_distribution(
+                dust.TableDistribution(a=np.array([0.1, 1.0]), n=np.array([0.0, 0.0]))
+            )
 
     def test_peaked_grid_matches_upstream_construction(self):
         d = dust._make_distribution(dust.PeakedPowerLaw(0.005, 0.15, -3.5))
@@ -131,6 +180,12 @@ class TestMaterial:
         m = dust.Material.from_file(f)
         np.testing.assert_allclose(m.wavelengths, [1.0, 2.0])
         np.testing.assert_allclose(m.refractive_indices, [1.5 + 0.1j, 1.6 + 0.2j])
+
+    def test_single_row_table_interpolate(self):
+        # regression: a one-row table used to crash with IndexError
+        m = dust.Material(np.array([2.0]), np.array([1.7 + 0.1j]))
+        mi = m.interpolate(np.array([2.0]))
+        np.testing.assert_allclose(mi.refractive_indices, [1.7 + 0.1j])
 
 
 class TestDustPipelinePlumbing:
@@ -237,6 +292,47 @@ class TestDustValidation:
         with pytest.raises(TypeError, match="unknown size distribution"):
             dust._make_distribution("not-a-distribution")
 
+    def test_series_order_guard_on_dust_path(self):
+        # regression: the dust path used to bypass mie.bhmie's series-order
+        # guard, so oversized x reached the Fortran 'stop' and killed the
+        # whole Python process
+        comp = dust.Component(
+            dust.Material(np.array([1e-3, 1.0]), np.array([1.7 + 0.1j, 1.5 + 0.01j])),
+            dust.PowerLaw(300.0, 400.0, -3.5),
+            1.0,
+            3.0,
+        )
+        with pytest.raises(ValueError, match="series order"):
+            dust.compute_dust_properties(
+                [comp], [0.001], 300.0, 400.0, 1, 5, 0
+            )
+
+    def test_no_size_overlap_raises(self):
+        # regression: zero total scattering (size range disjoint from the
+        # distribution) used to return NaN g silently
+        comp = dust.Component(
+            dust.Material(np.array([0.3, 5.0]), np.array([1.5 + 0.01j, 1.5 + 0.01j])),
+            dust.PowerLaw(0.01, 0.1, -3.5),
+            1.0,
+            3.0,
+        )
+        with pytest.raises(ValueError, match="does not overlap"):
+            dust.compute_dust_properties([comp], [1.0], 0.5, 0.6, 5, 5)
+
+    def test_scalar_wavelength_result_shape(self):
+        # regression: scalar wavelength produced a 0-d wavelengths field
+        # next to length-1 arrays
+        comp = dust.Component(
+            dust.Material(np.array([0.3, 5.0]), np.array([1.5 + 0.01j, 1.5 + 0.01j])),
+            dust.PowerLaw(0.05, 0.1, -3.5),
+            1.0,
+            3.0,
+        )
+        res = dust.compute_dust_properties([comp], 1.0, 0.05, 0.1, 3, 5)
+        assert res.wavelengths.shape == (1,)
+        assert res.cext.shape == (1,)
+        assert res.g.shape == (1,)
+
 
 class TestParameterFile:
     def test_parse_mrn77(self):
@@ -259,6 +355,41 @@ class TestParameterFile:
         assert inp.output_format == 2
         assert all(isinstance(c.distribution, dust.TableDistribution) for c in inp.components)
         assert inp.components[0].distribution.a.size > 0
+
+    def test_blank_lines_and_plain_separator_accepted(self, tmp_path):
+        # regression: upstream list-directed reads skip blank records and
+        # consume any record as the component separator; the positional
+        # reader used to crash on blank lines and require literal '---'
+        ri = tmp_path / "ri.dat"
+        ri.write_text("0.5 1.6 0.1\n2.0 1.5 0.01\n")
+        base = tmp_path / "model.in"
+        base.write_text(
+            "\n"
+            "'model' = prefix\n"
+            "\n"
+            "1 = output format\n"
+            "0.01 = amin\n"
+            "0.1 = amax\n"
+            "5 = na\n"
+            "5 = n_angles\n"
+            "0 = n_small\n"
+            "1 = n_components\n"
+            "100 = gas_to_dust\n"
+            "0.5 2.0 3 = wavelength parameters\n"
+            "\n"
+            "anything at all\n"
+            "1.0 = abundance\n"
+            "\n"
+            "3.0 = density\n"
+            "'ri.dat' = refractive index file\n"
+            "power = distribution\n"
+            "0.01 0.1 -3.5 = params\n"
+        )
+        inp = dust.read_parameter_file(base)
+        assert inp.prefix == "model"
+        assert inp.wavelengths.size == 3
+        assert len(inp.components) == 1
+        assert inp.components[0].distribution.apower == -3.5
 
 
 # ---------------------------------------------------------------------------

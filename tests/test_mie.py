@@ -28,7 +28,9 @@ class TestAgainstF77Oracle:
 
     @staticmethod
     def _oracle(x, m, nang):
-        return _bhmiepy_ext.bhmie_f77_ref(x, m, nang)
+        qext, qsca, qback, g, s1, s2, ierr = _bhmiepy_ext.bhmie_f77_ref(x, m, nang)
+        assert ierr == 0, f"F77 oracle refused the input (ierr={ierr})"
+        return qext, qsca, qback, g, s1, s2
 
     def test_efficiencies_fixed_cases(self):
         for x, m in self.CASES:
@@ -137,6 +139,29 @@ class TestValidation:
         # nmx = nint(x + 4x**(1/3) + 2) + 15 must stay below nmxx = 1e6
         with pytest.raises(ValueError, match="series order"):
             bhmie(1.2e6, 1.5 + 0.0j, nang=10)
+
+    def test_x_far_beyond_int64_range(self):
+        # regression: the guard used to cast to int64 first, which wraps
+        # around for x >~ 9.2e18 and silently bypassed the check
+        with pytest.raises(ValueError, match="series order"):
+            bhmie(1.0e19, 1.5 + 0.0j, nang=5)
+
+    def test_nang_upper_bound(self):
+        # regression: huge nang overflows the Fortran routine's stack
+        # automatic arrays (same flang behavior documented in bhmie_f77.f)
+        with pytest.raises(ValueError, match="nang must be <="):
+            bhmie(1.0, 1.5 + 0.0j, nang=10_001)
+
+    def test_oracle_rejects_out_of_range_input(self):
+        # regression: nang > MXNANG used to reach the F77 routine and kill
+        # the process via Fortran STOP
+        _, _, _, _, _, _, ierr = _bhmiepy_ext.bhmie_f77_ref(1.0, 1.5 + 0.0j, 1001)
+        assert ierr == 1
+        _, _, _, _, _, _, ierr = _bhmiepy_ext.bhmie_f77_ref(1.0, 1.5 + 0.0j, 1)
+        assert ierr == 1
+        # F77 series limit NMXX = 150000 is much stricter than the f90's 1e6
+        _, _, _, _, _, _, ierr = _bhmiepy_ext.bhmie_f77_ref(2.0e5, 1.5 + 0.0j, 10)
+        assert ierr == 2
 
     def test_compute_bad_radius(self):
         with pytest.raises(ValueError, match="radius"):

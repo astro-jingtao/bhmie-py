@@ -23,9 +23,13 @@ import numpy as np
 
 from . import _bhmiepy_ext
 from ._loglog import integral_loglog, integral_loglog_subset, interp1d_loglog, logspace
+from .mie import _check_series_order, _validate_inputs
 
-# upstream pi used in average_volume (distributions.f90: 3.1415926) --
-# kept truncated for bit-level fidelity of the port
+# distributions.f90 writes its average_volume with the literal 3.1415926;
+# in Fortran that literal is single precision (~3.14159250), so the port is
+# NOT bit-faithful either way -- we use the double value of the written
+# digits. The ~1e-7 relative difference sits far below the golden-test
+# tolerance and upstream's own output precision.
 _PI_UPSTREAM = 3.1415926
 
 
@@ -121,14 +125,25 @@ class TableDistribution:
 
 
 class _NumericalDistribution:
-    """Internal: normalized tabulated distribution (upstream type 2)."""
+    """Internal: normalized tabulated distribution (upstream type 2).
+    Expects an ascending size grid (callers flip descending tables first:
+    the log-log subset integral, like fortranlib's, assumes ascending)."""
 
     def __init__(self, a: np.ndarray, n_raw: np.ndarray, amin: float, amax: float):
-        self.a = np.asarray(a, dtype=np.float64)
+        a = np.asarray(a, dtype=np.float64)
         n_raw = np.asarray(n_raw, dtype=np.float64)
-        self.m_raw = n_raw * self.a**3
-        self.n = n_raw / integral_loglog(self.a, n_raw)
-        self.m = self.m_raw / integral_loglog(self.a, self.m_raw)
+        if not np.all(np.isfinite(a)) or not np.all(np.isfinite(n_raw)):
+            raise ValueError("table distribution contains non-finite values")
+        if not np.all(np.diff(a) >= 0.0):
+            raise ValueError("internal: size table must be ascending")
+        norm = integral_loglog(a, n_raw)
+        if not (norm > 0.0):  # also false for NaN
+            raise ValueError(
+                "table distribution has zero (or non-finite) total integral; "
+                "cannot normalize"
+            )
+        self.a = a
+        self.n = n_raw / norm
         self.amin = amin
         self.amax = amax
 
@@ -151,6 +166,8 @@ def _make_distribution(spec):
     if isinstance(spec, PowerLaw):
         return _PowerLawImpl(spec.amin, spec.amax, spec.apower)
     if isinstance(spec, PeakedPowerLaw):
+        if not spec.aturn > 0.0:
+            raise ValueError("PeakedPowerLaw requires aturn > 0")
         i = np.arange(1, 1001)
         a = 10.0 ** (-5.0 + i / 1000.0 * 10.0)
         n = a ** spec.apower * np.exp(-a / spec.aturn)
@@ -158,10 +175,17 @@ def _make_distribution(spec):
     if isinstance(spec, TableDistribution):
         a = np.asarray(spec.a, dtype=np.float64)
         n = np.asarray(spec.n, dtype=np.float64)
-        if np.any(np.diff(a) <= 0) and np.any(np.diff(a) >= 0):
-            raise ValueError("table distribution must be sorted (ascending or descending)")
         if np.any(a <= 0) or np.any(n < 0):
             raise ValueError("table distribution requires a > 0 and n >= 0")
+        diff = np.diff(a)
+        if np.all(diff >= 0.0):
+            pass  # ascending (duplicates allowed; zero-width bins contribute 0)
+        elif np.all(diff <= 0.0):
+            a, n = a[::-1], n[::-1]  # flip: the subset integral assumes ascending
+        else:
+            raise ValueError(
+                "table distribution sizes must be sorted (ascending or descending)"
+            )
         return _NumericalDistribution(a, n, a[0], a[-1])
     raise TypeError(f"unknown size distribution spec: {type(spec).__name__}")
 
@@ -294,7 +318,7 @@ def compute_dust_properties(
     if len(components) == 0:
         raise ValueError("at least one component is required")
 
-    wavelengths = np.asarray(wavelengths, dtype=np.float64)
+    wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
     if np.any(wavelengths <= 0.0) or not np.all(np.isfinite(wavelengths)):
         raise ValueError("wavelengths must be positive and finite")
     nwav = wavelengths.size
@@ -345,6 +369,15 @@ def compute_dust_properties(
     a_mid = 10.0 ** (logamin + logastep * (idx - 0.5))
     a_hi = 10.0 ** (logamin + logastep * idx)
 
+    # Guard every (bin, wavelength) pair BEFORE any Fortran call: an
+    # oversized size parameter would hit the Fortran "stop" and kill the
+    # whole Python process (same guard mie.bhmie applies, applied to the
+    # full batch here so the loop below is safe).
+    for mat in materials:
+        x_all = 2.0 * np.pi * a_mid[:, None] / wavelengths[None, :]
+        _validate_inputs(x_all, np.broadcast_to(mat.refractive_indices, x_all.shape))
+        _check_series_order(x_all, np.broadcast_to(mat.refractive_indices, x_all.shape))
+
     cext = np.zeros(nwav)
     csca = np.zeros(nwav)
     cback = np.zeros(nwav)
@@ -357,7 +390,10 @@ def compute_dust_properties(
     for ic, (dist, mat) in enumerate(zip(dists, materials)):
         for ia in range(na):
             weight = dist.weight_number(a_lo[ia], a_hi[ia]) * abundance_number[ic]
-            if weight <= 0.0:
+            # upstream semantics: 'if (weight_number > 0)' -- false for NaN,
+            # so a non-finite weight skips the bin instead of poisoning the
+            # accumulators (construction-time checks reject the known causes)
+            if not (weight > 0.0):
                 continue
             a = a_mid[ia]
             # microns -> cm^2: pi*a^2 * 1e-8
@@ -381,8 +417,13 @@ def compute_dust_properties(
     kappa_ext = cext * np.sum(abundance_mass / average_particle_mass)
     kappa_ext = kappa_ext / (1.0 + gas_to_dust)
 
-    with np.errstate(invalid="ignore", divide="ignore"):
-        gsca = gsca / csca
+    if np.any(csca <= 0.0):
+        raise ValueError(
+            "total scattering cross-section is zero at "
+            f"{int(np.sum(csca <= 0.0))} of {nwav} wavelengths -- the size "
+            "range [amin, amax] does not overlap any component distribution"
+        )
+    gsca = gsca / csca
 
     angles_full = np.concatenate([angles, np.pi - angles[-2::-1]])
 
@@ -435,53 +476,55 @@ def _floats(line: str, n: int):
 
 def read_parameter_file(path) -> DustInputFile:
     """Read an upstream bhmie parameter file (see bhmie/README.md for the
-    format). Relative refractive-index and table paths are resolved against
-    the parameter file's directory, as the upstream CLI expects to be run
-    from there."""
+    format). Blank lines are skipped and component separators are consumed
+    like the upstream CLI's list-directed reads (any single record). Relative
+    refractive-index and table paths are resolved against the parameter
+    file's directory, as the upstream CLI expects to be run from there."""
     path = Path(path)
-    lines = path.read_text().splitlines()
+    records = [ln for ln in path.read_text().splitlines() if ln.strip()]
     base = path.parent
 
-    def line(i):
-        return lines[i]
+    def record(i):
+        if i >= len(records):
+            raise ValueError(f"parameter file ended early (wanted record {i + 1})")
+        return records[i]
 
+    wmin, wmax, nw = _floats(record(9), 3)
     parsed = DustInputFile(
-        prefix=_first_token(line(0)),
-        output_format=int(_first_token(line(1))),
-        amin=_floats(line(2), 1)[0],
-        amax=_floats(line(3), 1)[0],
-        na=int(_first_token(line(4))),
-        n_angles=int(_first_token(line(5))),
-        n_small_angles=int(_first_token(line(6))),
-        gas_to_dust=_floats(line(8), 1)[0],
-        wavelengths=logspace(*_floats(line(9), 3)[0:2], int(line(9).split()[2])),
+        prefix=_first_token(record(0)),
+        output_format=int(_first_token(record(1))),
+        amin=_floats(record(2), 1)[0],
+        amax=_floats(record(3), 1)[0],
+        na=int(_first_token(record(4))),
+        n_angles=int(_first_token(record(5))),
+        n_small_angles=int(_first_token(record(6))),
+        gas_to_dust=_floats(record(8), 1)[0],
+        wavelengths=logspace(wmin, wmax, int(nw)),
         components=[],
     )
-    n_components = int(_first_token(line(7)))
+    n_components = int(_first_token(record(7)))
 
     i = 10
     for _ in range(n_components):
-        if not lines[i].strip().startswith("---"):
-            raise ValueError(f"expected component separator at line {i + 1}")
+        i += 1  # separator record (consumed without interpretation, upstream read(32,*))
+        abundance = _floats(record(i), 1)[0]
         i += 1
-        abundance = _floats(line(i), 1)[0]
+        density = _floats(record(i), 1)[0]
         i += 1
-        density = _floats(line(i), 1)[0]
+        material = Material.from_file(base / _first_token(record(i)))
         i += 1
-        material = Material.from_file(base / _first_token(line(i)))
-        i += 1
-        dist_type = _first_token(line(i)).lower()
+        dist_type = _first_token(record(i)).lower()
         i += 1
         if dist_type == "power":
-            a0, a1_, a2_ = _floats(line(i), 3)
+            a0, a1_, a2_ = _floats(record(i), 3)
             dist = PowerLaw(a0, a1_, a2_)
         elif dist_type == "ped":
-            a0, aturn, apower = _floats(line(i), 3)
+            a0, aturn, apower = _floats(record(i), 3)
             dist = PeakedPowerLaw(a0, aturn, apower)
         elif dist_type == "table":
-            dist = TableDistribution.from_file(base / _first_token(line(i)))
+            dist = TableDistribution.from_file(base / _first_token(record(i)))
         else:
-            raise ValueError(f"unknown distribution type {dist_type!r} at line {i + 1}")
+            raise ValueError(f"unknown distribution type {dist_type!r} in record {i + 1}")
         i += 1
         parsed.components.append(
             Component(

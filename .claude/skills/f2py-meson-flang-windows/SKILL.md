@@ -78,6 +78,18 @@ fails with a confusing `shape(...) == n` error). Pass everything after
 the leading arrays by keyword, and when in doubt print `ext.__doc__` to
 see the generated signature.
 
+## R7 — Guard EVERY entry into process-fatal Fortran; port predicates with their NaN semantics
+
+Legacy Fortran routines report invalid input with `stop`/`error stop`,
+which kills the whole Python process with no traceback. A guard on one
+Python caller does not protect other callers of the same extension —
+validate at every exported entry, or give the Fortran wrapper an `ierr`
+out-argument that callers must check. When porting the routine's guard
+formulas to Python: compare in float64 BEFORE any int cast (an int64
+cast wraps at ~9.2e18 and silently bypasses range checks), and preserve
+comparison polarity — upstream `if (w > 0)` skips NaN where a natural
+rewrite `if w <= 0: pass-through` executes it; port as `if not (w > 0)`.
+
 ---
 
 # Environment Setup (once per machine / env)
