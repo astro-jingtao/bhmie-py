@@ -146,11 +146,13 @@ class TestValidation:
         with pytest.raises(ValueError, match="series order"):
             bhmie(1.0e19, 1.5 + 0.0j, nang=5)
 
-    def test_nang_upper_bound(self):
-        # regression: huge nang overflows the Fortran routine's stack
-        # automatic arrays (same flang behavior documented in bhmie_f77.f)
-        with pytest.raises(ValueError, match="nang must be <="):
-            bhmie(1.0, 1.5 + 0.0j, nang=10_001)
+    def test_large_nang_works(self):
+        # regression: nang beyond ~20000 used to overflow the stack (flang
+        # stacked the routine's automatic arrays); they are heap-allocated
+        # now, so a fine angular grid well past the old limit must work
+        res = bhmie(1.0, 1.5 + 0.0j, nang=10_001)
+        assert res.s1.shape == (2 * 10_001 - 1,)
+        assert float(res.qext) > 0.0
 
     def test_oracle_rejects_out_of_range_input(self):
         # regression: nang > MXNANG used to reach the F77 routine and kill
@@ -219,3 +221,20 @@ class TestCompute:
     def test_compute_vectorized(self):
         got = compute(np.array([0.05, 0.1, 0.2]), 0.25, 1.6 + 0.01j, nang=5)
         assert got.qext.shape == (3,)
+
+
+@pytest.mark.slow
+class TestUpstreamEquivalence:
+    """The package's optimized BHMIE copy must produce results IDENTICAL to
+    the pristine upstream code compiled into the same extension (the only
+    differences are allocation strategy -- see _fortran/bhmie.f90 header
+    and benchmarks/bench_upstream.py for the timing comparison)."""
+
+    def test_batch_identical_to_pristine_upstream(self):
+        rng = np.random.default_rng(7)
+        x = np.exp(rng.uniform(np.log(0.01), np.log(300.0), size=400))
+        m = rng.uniform(1.1, 2.2, size=400) + 1j * rng.uniform(0.0, 0.8, size=400)
+        out_ours = _bhmiepy_ext.bhmie_vec(x, m, 45)
+        out_up = _bhmiepy_ext.bhmie_vec_upstream(x, m, 45)
+        for a, b in zip(out_ours, out_up):
+            np.testing.assert_array_equal(a, b)

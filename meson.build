@@ -38,6 +38,7 @@ fortran_sources = files(
   'src/bhmiepy/_fortran/bhmiepy_ext.f90',
   'src/bhmiepy/_fortran/types.f90',
   'src/bhmiepy/_fortran/bhmie.f90',
+  'src/bhmiepy/_fortran/bhmie_upstream.f90',
   'src/bhmiepy/_fortran/bhmie_f77.f',
 )
 

@@ -83,6 +83,32 @@ subroutine bhmie_vec_ang(n, x, m, nang, angles, qext, qsca, qback, g, s1, s2)
 
 end subroutine bhmie_vec_ang
 
+subroutine bhmie_vec_upstream(n, x, m, nang, qext, qsca, qback, g, s1, s2)
+
+  ! Vectorized Mie computation over n (x, m) pairs through the PRISTINE
+  ! upstream routine (bhmie_upstream.f90: verbatim body, including the
+  ! original allocate(d(nmxx)) per call). Kept for benchmarking and
+  ! auditing the package's optimized copy; not used by the public API.
+  ! Same Python-side-validation rule as bhmie_vec applies.
+
+  implicit none
+
+  integer, intent(in) :: n
+  integer, intent(in) :: nang
+  double precision, intent(in) :: x(n)
+  double complex, intent(in) :: m(n)
+  double precision, intent(out) :: qext(n), qsca(n), qback(n), g(n)
+  double complex, intent(out) :: s1(2*nang-1, n), s2(2*nang-1, n)
+
+  integer :: i
+
+  do i = 1, n
+     call bhmie_upstream_core(x(i), m(i), nang, s1(:, i), s2(:, i), &
+          & qext(i), qsca(i), qback(i), g(i))
+  end do
+
+end subroutine bhmie_vec_upstream
+
 subroutine bhmie_f77_ref(x, refrel, nang, qext, qsca, qback, gsca, s1, s2, ierr)
 
   ! Scalar reference computation through the ORIGINAL fixed-form F77

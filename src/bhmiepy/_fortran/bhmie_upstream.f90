@@ -1,26 +1,23 @@
 ! ===========================================================================
-! This file is part of bhmiepy. It is a copy of a source file from the bhmie
-! project (https://github.com/hyperion-rt/bhmie), snapshot taken at upstream
-! commit 37c072909a67d1027120762680a1c0b350875398 (2013-10-08), and may be
-! modified for bhmiepy. A pristine copy of the upstream tree is kept in the
-! top-level bhmie/ directory of the bhmiepy repository for reference and
-! testing.
+! PRISTINE upstream copy of the bhmie Fortran 90 routine, kept for
+! benchmarking and auditing against the copy this package actually uses
+! (src/bhmiepy/_fortran/bhmie.f90, which contains documented performance
+! and stack-safety modifications).
 !
-! Modifications for bhmiepy (relative to the upstream file):
-!  1. appended two bare external subroutines (bhmie_core, bhmie_core_ang)
-!     below "end module" as explicit-shape, F77-convention bridges so that
-!     f2py-wrapped code (bhmiepy_ext.f90) can call the module routine
-!     through stable external symbols, with and without a custom angle
-!     grid;
-!  2. inside subroutine bhmie, the workspace is allocated as d(nmx) (after
-!     the nmx > nmxx check) instead of the upstream d(nmxx) -- only
-!     d(1:nmx) is used, and the 16 MB full-size allocation per call
-!     dominated batched-use runtime. Results are bit-identical;
-!  3. the five nang-sized local arrays (amu, pi, pi0, pi1, tau) are
-!     declared allocatable and allocated on the heap instead of being
-!     nang-sized automatic arrays -- compilers that stack automatic arrays
-!     (LLVM flang on Windows) would overflow the default stack for large
-!     nang. Results are identical.
+! Source: https://github.com/hyperion-rt/bhmie, file src/bhmie.f90,
+! upstream commit 37c072909a67d1027120762680a1c0b350875398 (2013-10-08).
+!
+! Deviations from the upstream file (all recorded here):
+!  1. this comment header was prepended;
+!  2. the module was renamed bhmie_routine -> bhmie_routine_upstream so it
+!     can coexist with the package's own copy in the same build (Fortran
+!     module names collide on the .mod files otherwise);
+!  3. a bare bridge subroutine bhmie_upstream_core was appended below the
+!     module end (same pattern as bhmie_core in bhmie.f90).
+! The subroutine body between "module bhmie_routine_upstream" and its
+! "end module" is otherwise VERBATIM upstream code, including the original
+! allocate(d(nmxx)) full-workspace allocation that the package's copy
+! optimizes away -- that is precisely the difference being benchmarked.
 !
 ! ---------------------------------------------------------------------------
 ! Original copyright notice and license (BSD 2-Clause):
@@ -29,34 +26,35 @@
 ! All rights reserved.
 !
 ! Redistribution and use in source and binary forms, with or without
-! modification, are permitted provided that the following conditions are met:
+! modification, are permitted provided that the following conditions
+! are met:
 !
-!  * Redistributions of source code must retain the above copyright notice,
-!    this list of conditions and the following disclaimer.
+!  * Redistributions of source code must retain the above copyright
+!    notice, this list of conditions and the following disclaimer.
 !
 !  * Redistributions in binary form must reproduce the above copyright
-!    notice, this list of conditions and the following disclaimer in the
-!    documentation and/or other materials provided with the distribution.
+!    notice, this list of conditions and the following disclaimer in
+!    the documentation and/or other materials provided with the
+!    distribution.
 !
-! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-! AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-! IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-! ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-! LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-! CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-! SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-! INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-! ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-! POSSIBILITY OF SUCH DAMAGE.
+! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+! "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+! LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+! A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+! HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+! SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+! LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+! DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+! THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+! (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+! OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 !
 ! The underlying BHMIE subroutine originates from Appendix A of
-! Bohren & Huffman, "Absorption and Scattering of Light by Small Particles"
-! (Wiley, 1983), with extensive modifications by B. T. Draine (see the
-! history log in bhmie/original/bhmie.f in the upstream snapshot).
+! Bohren & Huffman, "Absorption and Scattering of Light by Small
+! Particles" (Wiley, 1983), with extensive modifications by
+! B. T. Draine (see the history log below).
 ! ===========================================================================
-
-module bhmie_routine
+module bhmie_routine_upstream
 
   use types
   implicit none
@@ -87,14 +85,11 @@ contains
 
     integer :: j,jj,n,nstop,nmx,nn
     real(dp) :: chi,chi0,chi1,dang,dx,en,fn,p,psi,psi0,psi1,theta,xstop,ymod
-    real(dp), allocatable, dimension(:) :: amu, pi, pi0, pi1, tau
+    real(dp), dimension(nang) :: amu, pi, pi0, pi1, tau
     complex(dp) :: an,an1,bn,bn1,drefrl,xi,xi1,y
 
     complex(dp),allocatable,dimension(:) :: d
-    ! bhmiepy note: allocated as d(nmx) further below (after the nmx > nmxx
-    ! check) instead of the upstream d(nmxx): only d(1:nmx) is ever used,
-    ! and allocating the full nmxx = 1e6 complex array (16 MB) per call
-    ! dominates runtime in batched use. Results are bit-identical.
+    allocate(d(nmxx))
 
     !***********************************************************************
     !
@@ -199,13 +194,6 @@ contains
 
     if(nang.lt.2) stop "nang should be > 1"
 
-    ! bhmiepy note: amu/pi/pi0/pi1/tau are allocated on the heap here
-    ! (upstream declares them as nang-sized automatic arrays); some
-    ! compilers (e.g. LLVM flang on Windows) place automatic arrays on
-    ! the stack, which overflows the default 1 MB stack for nang beyond
-    ! roughly 20000. Results are identical.
-    allocate(amu(nang), pi(nang), pi0(nang), pi1(nang), tau(nang))
-
     !*** Obtain pi:
 
     dx=x
@@ -231,8 +219,6 @@ contains
        write(0,*)'error: nmx > nmxx=',nmxx,' for |m|x=',ymod
        stop
     endif
-
-    allocate(d(nmx))
 
     !*** Require NANG.GE.1 in order to calculate scattering intensities
 
@@ -370,18 +356,17 @@ contains
 
   end subroutine bhmie
 
-end module bhmie_routine
+end module bhmie_routine_upstream
 
 ! ===========================================================================
-! bhmiepy additions (not part of upstream bhmie): external-name bridges to
-! the module routine, so f2py-generated code can link against plain
-! external symbols with explicit-shape signatures.
+! bhmiepy addition for benchmarking: bare external bridge to the pristine
+! module (same pattern as bhmie_core in bhmie.f90).
 ! ===========================================================================
 
-subroutine bhmie_core(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
+subroutine bhmie_upstream_core(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
 
   use types
-  use bhmie_routine, only: bhmie
+  use bhmie_routine_upstream, only: bhmie
   implicit none
 
   integer, intent(in) :: nang
@@ -392,21 +377,4 @@ subroutine bhmie_core(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
 
   call bhmie(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
 
-end subroutine bhmie_core
-
-subroutine bhmie_core_ang(x, refrel, nang, angles, s1, s2, qext, qsca, qback, gsca)
-
-  use types
-  use bhmie_routine, only: bhmie
-  implicit none
-
-  integer, intent(in) :: nang
-  double precision, intent(in) :: x
-  complex(dp), intent(in) :: refrel
-  real(dp), intent(in) :: angles(nang)
-  complex(dp), intent(out) :: s1(2*nang-1), s2(2*nang-1)
-  double precision, intent(out) :: qext, qsca, qback, gsca
-
-  call bhmie(x, refrel, nang, s1, s2, qext, qsca, qback, gsca, angles)
-
-end subroutine bhmie_core_ang
+end subroutine bhmie_upstream_core

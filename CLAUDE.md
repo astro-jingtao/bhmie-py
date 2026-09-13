@@ -31,6 +31,13 @@ The repository deliberately mixes code under two licenses:
 - `src/bhmiepy/_fortran/bhmie_f77.f` — verbatim copy of the original F77
   BHMIE (plus a header and one SAVE statement, both documented in the
   header). Same BSD-2-Clause terms; keep it unmodified.
+- `src/bhmiepy/_fortran/bhmie_upstream.f90` — pristine copy of upstream
+  `src/bhmie.f90` (module renamed `bhmie_routine_upstream` so it can
+  coexist with the package copy in one build; a bridge subroutine was
+  appended). BSD-2-Clause, same rules: keep the body verbatim, record any
+  deviation in its header. It exists for benchmarking/auditing the
+  optimized copy (`benchmarks/bench_upstream.py`, slow test
+  `TestUpstreamEquivalence`).
 - `src/bhmiepy/_loglog.py` — Python translation of algorithms from
   astrofrog/fortranlib, **BSD-2-Clause**, © 2009-13 Thomas P. Robitaille
   (see LICENSES/BSD-2-Clause-fortranlib.txt). It defines the upstream
@@ -67,9 +74,14 @@ The repository deliberately mixes code under two licenses:
   `FFLAGS=-static-libflangrt`); the script header documents each one. Do not
   inline this chain as a single `cmd /c '...'` line — `%LIB%` then expands
   before vcvarsall has run and breaks the MSVC library search.
-- Run tests: `conda run -n bhmiepy python -m pytest`
+- Run tests: `scripts\test.cmd` (fast suite) / `scripts\test.cmd -m slow`
+  (golden-data + upstream-equivalence runs) / pass any pytest args through.
+- Benchmark vs pristine upstream Fortran:
+  `python benchmarks\bench_upstream.py` (activated env) — asserts identical
+  results and reports the timing comparison.
 - Rebuild after touching only Python files is unnecessary (editable); after
-  touching Fortran or meson.build, rerun `scripts\dev-install.cmd`. If meson
+  touching Fortran or meson.build, rerun `scripts\dev-install.cmd` (a stale
+  build makes the import-time rebuild fail and breaks `test.cmd`). If meson
   gets confused, delete the `build/` directory first.
 - Build-system gotchas already handled (keep them handled):
   - the f2py `custom_target` must stay in the root `meson.build` (f2py writes

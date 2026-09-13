@@ -21,12 +21,6 @@ from . import _bhmiepy_ext
 # process -- so the limit is enforced here, before the call.
 _NMXX = 1_000_000
 
-# The Fortran routine keeps five nang-sized automatic arrays (amu, pi, pi0,
-# pi1, tau) that flang places on the stack (see the bhmie_f77.f header note
-# for the same behavior); beyond this nang the default 1 MB Windows stack
-# overflows. Generous relative to upstream's own MXNANG = 1000.
-_NANG_MAX = 10_000
-
 
 @dataclass
 class MieResult:
@@ -134,11 +128,6 @@ def bhmie(x, m, nang: int = 90) -> MieResult:
     nang = operator.index(nang)
     if nang < 2:
         raise ValueError(f"nang must be >= 2 (got {nang})")
-    if nang > _NANG_MAX:
-        raise ValueError(
-            f"nang must be <= {_NANG_MAX} (got {nang}): larger values "
-            "overflow the stack of the Fortran routine's automatic arrays"
-        )
 
     x_arr = np.asarray(x, dtype=np.float64)
     m_arr = np.asarray(m, dtype=np.complex128)

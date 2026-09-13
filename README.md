@@ -83,8 +83,21 @@ exact recipe: conda-forge `flang` + `flang-rt_win-64`, meson-python, ninja)
 and Visual Studio Build Tools for the C compiler.
 
 ```powershell
-cmd /c scripts\dev-install.cmd
-conda run -n bhmiepy python -m pytest
+cmd /c scripts\dev-install.cmd   # build + editable install
+cmd /c scripts\test.cmd          # fast test suite (args pass through to pytest)
+cmd /c scripts\test.cmd -m slow  # golden-data + upstream-equivalence runs
+```
+
+### Benchmark vs the pristine upstream Fortran
+
+`benchmarks/bench_upstream.py` compares the package's optimized BHMIE copy
+against a verbatim upstream copy compiled into the same extension. On a
+dust-shaped workload (2400 size x wavelength points) the results are
+bitwise identical and the optimized copy is ~2.5-3x faster (the upstream
+code allocates a fixed 16 MB workspace on every call):
+
+```powershell
+cmd /c "call C:\Users\<you>\anaconda3\Scripts\activate.bat bhmiepy && python benchmarks\bench_upstream.py"
 ```
 
 ## Repository layout
