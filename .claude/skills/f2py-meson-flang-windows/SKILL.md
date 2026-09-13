@@ -67,6 +67,17 @@ f2py-parsed code calls. This also avoids the silent collision between a
 module procedure name and a same-named F77 external — both would bind to
 the `name_` symbol, calling the wrong routine.
 
+## R6 — Call f2py entry points with keyword arguments after the leading arrays
+
+f2py REORDERS the generated signature: an argument that owns another
+argument's dimension (e.g. `nang` dimensioning `angles(nang)`) becomes
+optional and is moved AFTER the array it dimensions — source
+`(x, m, nang, angles)` generates `mod.f(x, m, angles, [n, nang])`.
+Positional calls silently misbind (a scalar lands on the array slot and
+fails with a confusing `shape(...) == n` error). Pass everything after
+the leading arrays by keyword, and when in doubt print `ext.__doc__` to
+see the generated signature.
+
 ---
 
 # Environment Setup (once per machine / env)
@@ -135,7 +146,7 @@ load-bearing details:
 | `'ascii' codec can't decode byte ...` in crackfortran | non-ASCII chars in Fortran | R4: pure ASCII |
 | `LNK2001: unresolved external symbol <sub>_` | implementation file only given to f2py, not compiled | R2: add to extension sources |
 | Python process dies, no traceback, exit `-1073741571` (`0xC00000FD`) | legacy F77 local array larger than the 1 MB stack — flang stacks large locals, gfortran moves them to static storage | add `SAVE` to the vendored routine (restores F77 static semantics), record it in the file header |
-| `import` triggers a ninja rebuild that fails (`WinError 2`, or `LNK1104`) | meson-python editable installs rebuild-on-import; the rebuild subprocess runs plain ninja without vcvars/`LIB`/`FFLAGS` | after editing Fortran, rerun the full dev-install script before invoking Python; run Python through an activated env |
+| `import` triggers a ninja rebuild that fails (`WinError 2`, `LNK1104`, or `Regenerating build files` exits 1) | meson-python editable installs rebuild-on-import; the rebuild subprocess runs plain ninja/meson without vcvars/`LIB`/`FFLAGS` — fires after editing Fortran AND after any meson.build change | rerun the full dev-install script after touching Fortran or meson.build, before invoking Python; run Python through an activated env |
 | `Successfully installed` but `import` fails on missing symbol | stale `build/` dir from earlier attempt | delete `build/`, rebuild |
 
 ---

@@ -6,11 +6,12 @@
 ! top-level bhmie/ directory of the bhmiepy repository for reference and
 ! testing.
 !
-! Modifications for bhmiepy (relative to the upstream file): appended the
-! bare external subroutine bhmie_core below "end module" as an explicit-
-! shape, F77-convention bridge so that f2py-wrapped code (bhmiepy_ext.f90)
-! can call the module routine through a stable external symbol. The module
-! itself is unchanged.
+! Modifications for bhmiepy (relative to the upstream file): appended two
+! bare external subroutines (bhmie_core, bhmie_core_ang) below "end module"
+! as explicit-shape, F77-convention bridges so that f2py-wrapped code
+! (bhmiepy_ext.f90) can call the module routine through stable external
+! symbols, with and without a custom angle grid. The module itself is
+! unchanged.
 !
 ! ---------------------------------------------------------------------------
 ! Original copyright notice and license (BSD 2-Clause):
@@ -351,9 +352,9 @@ contains
 end module bhmie_routine
 
 ! ===========================================================================
-! bhmiepy addition (not part of upstream bhmie): external-name bridge to
-! the module routine, so f2py-generated code can link against a plain
-! external symbol with an explicit-shape signature.
+! bhmiepy additions (not part of upstream bhmie): external-name bridges to
+! the module routine, so f2py-generated code can link against plain
+! external symbols with explicit-shape signatures.
 ! ===========================================================================
 
 subroutine bhmie_core(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
@@ -371,3 +372,20 @@ subroutine bhmie_core(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
   call bhmie(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
 
 end subroutine bhmie_core
+
+subroutine bhmie_core_ang(x, refrel, nang, angles, s1, s2, qext, qsca, qback, gsca)
+
+  use types
+  use bhmie_routine, only: bhmie
+  implicit none
+
+  integer, intent(in) :: nang
+  double precision, intent(in) :: x
+  complex(dp), intent(in) :: refrel
+  real(dp), intent(in) :: angles(nang)
+  complex(dp), intent(out) :: s1(2*nang-1), s2(2*nang-1)
+  double precision, intent(out) :: qext, qsca, qback, gsca
+
+  call bhmie(x, refrel, nang, s1, s2, qext, qsca, qback, gsca, angles)
+
+end subroutine bhmie_core_ang

@@ -62,3 +62,28 @@ knowledge candidates motivated it. Format: skill-forge
     scope: passed
     provenance: passed
 ```
+
+```yaml
+- date: 2026-09-13
+  action: update
+  skill_name: f2py-meson-flang-windows
+  scope: project
+  path: .claude/skills/f2py-meson-flang-windows/
+  source_candidates:
+    - KC-20260913-001
+  derived_from: []
+  changes:
+    - "new Hard Rule R6: f2py reorders generated signatures (dimension-
+      owning args become optional and move after the array; positional
+      calls silently misbind) — call entry points with keyword args after
+      the leading arrays, check ext.__doc__ when in doubt"
+    - "editable-rebuild troubleshooting row amended: fires after Fortran
+      AND meson.build edits (regeneration step exits 1 without the
+      toolchain env)"
+  authorization: ""
+  validation:
+    frontmatter: passed
+    structure: passed
+    scope: passed
+    provenance: passed
+```

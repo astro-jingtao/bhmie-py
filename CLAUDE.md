@@ -28,6 +28,14 @@ The repository deliberately mixes code under two licenses:
   - never delete or alter the license header block at the top of the file;
   - update the "Modifications for bhmiepy (relative to the upstream file)"
     line in the header whenever a change diverges from upstream.
+- `src/bhmiepy/_fortran/bhmie_f77.f` — verbatim copy of the original F77
+  BHMIE (plus a header and one SAVE statement, both documented in the
+  header). Same BSD-2-Clause terms; keep it unmodified.
+- `src/bhmiepy/_loglog.py` — Python translation of algorithms from
+  astrofrog/fortranlib, **BSD-2-Clause**, © 2009-13 Thomas P. Robitaille
+  (see LICENSES/BSD-2-Clause-fortranlib.txt). It defines the upstream
+  numerical conventions — do not "simplify" its formulas away from the
+  fortranlib originals (golden tests depend on them).
 - `src/bhmiepy/_fortran/bhmiepy_ext.f90` and everything under `src/bhmiepy/`
   except the two files above — new code written for bhmiepy, **MIT**.
 - `bhmie/` — pristine snapshot of upstream hyperion-rt/bhmie at commit

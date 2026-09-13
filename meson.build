@@ -1,5 +1,5 @@
 project('bhmiepy', 'c', 'fortran',
-  version : '0.1.0',
+  version : '0.2.0',
   meson_version : '>=1.1.0',
   default_options : ['buildtype=release', 'c_std=c99'])
 
@@ -21,7 +21,9 @@ inc_np = include_directories(incdir_numpy, incdir_f2py)
 
 py.install_sources(
   'src/bhmiepy/__init__.py',
+  'src/bhmiepy/_loglog.py',
   'src/bhmiepy/mie.py',
+  'src/bhmiepy/dust.py',
   subdir : 'bhmiepy',
 )
 

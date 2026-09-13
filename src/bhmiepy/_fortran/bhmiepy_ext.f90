@@ -56,6 +56,33 @@ subroutine bhmie_vec(n, x, m, nang, qext, qsca, qback, g, s1, s2)
 
 end subroutine bhmie_vec
 
+subroutine bhmie_vec_ang(n, x, m, nang, angles, qext, qsca, qback, g, s1, s2)
+
+  ! Vectorized Mie computation over n (x, m) pairs on a CUSTOM angle grid:
+  ! angles(1:nang) must cover 0 to pi/2 (angles(1) == 0 and angles(nang)
+  ! == pi/2 exactly, enforced by the upstream routine), and the amplitudes
+  ! are returned on the mirrored 0..pi grid (2*nang-1 points). Same
+  ! Python-side-validation rule as bhmie_vec applies.
+
+  implicit none
+
+  integer, intent(in) :: n
+  integer, intent(in) :: nang
+  double precision, intent(in) :: x(n)
+  double complex, intent(in) :: m(n)
+  double precision, intent(in) :: angles(nang)
+  double precision, intent(out) :: qext(n), qsca(n), qback(n), g(n)
+  double complex, intent(out) :: s1(2*nang-1, n), s2(2*nang-1, n)
+
+  integer :: i
+
+  do i = 1, n
+     call bhmie_core_ang(x(i), m(i), nang, angles, s1(:, i), s2(:, i), &
+          & qext(i), qsca(i), qback(i), g(i))
+  end do
+
+end subroutine bhmie_vec_ang
+
 subroutine bhmie_f77_ref(x, refrel, nang, qext, qsca, qback, gsca, s1, s2)
 
   ! Scalar reference computation through the ORIGINAL fixed-form F77

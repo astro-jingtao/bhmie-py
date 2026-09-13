@@ -21,3 +21,18 @@ Appendix A of:
 with extensive modifications by B. T. Draine (Princeton University
 Observatory), as documented in the history log of bhmie/original/bhmie.f in
 the upstream snapshot.
+
+---
+
+src/bhmiepy/_loglog.py is a Python translation (derivative work) of
+algorithms from:
+
+  fortranlib — https://github.com/astrofrog/fortranlib
+  Copyright (c) 2009-13, Thomas P. Robitaille
+  Distributed under the BSD 2-Clause License.
+  See LICENSES/BSD-2-Clause-fortranlib.txt.
+
+The translated routines (integral_loglog, interp1d_loglog, locate, logspace,
+and their helper formulas) define the numerical conventions the upstream
+bhmie dust pipeline is built on; they are reproduced operation by operation
+so that bhmiepy's results match the upstream tool.

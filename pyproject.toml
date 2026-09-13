@@ -4,7 +4,7 @@ build-backend = "mesonpy"
 
 [project]
 name = "bhmiepy"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python interface to the BHMie Mie scattering code"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -30,3 +30,7 @@ test = ["pytest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: full golden-data runs reproducing the upstream CLI computation (~minutes each); run explicitly with 'pytest -m slow'",
+]

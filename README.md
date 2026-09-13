@@ -38,9 +38,43 @@ Validated against the original F77 BHMIE (bundled as a single-precision
 oracle in the extension), Rayleigh / geometric limits, and energy
 conservation — see `tests/`.
 
-Phase 2 will add the dust-population layer of the upstream code:
-size-distribution averaging, refractive-index tables, scattering matrices,
-and extinction opacities.
+## Usage (Phase 2: dust populations)
+
+Size-distribution-averaged dust properties — the full capability of the
+upstream CLI tool, as a library call (units follow upstream: micron,
+g/cm^3, cm^2):
+
+```python
+import numpy as np
+from bhmiepy import dust
+
+silicate = dust.Material.from_file("bhmie/examples/ri-data/silicate_ld93")
+comp = dust.Component(
+    material=silicate,
+    distribution=dust.PowerLaw(0.005, 0.25, -3.5),  # n(a) ~ a^-3.5
+    abundance_mass=0.627,
+    density=3.3,
+)
+res = dust.compute_dust_properties(
+    [comp],
+    wavelengths=np.logspace(np.log10(0.01), np.log10(1000), 250),
+    amin=0.005, amax=1.0, na=1000,
+    n_angles=181, n_small_angles=10,
+    gas_to_dust=141.84,
+)
+res.kappa_ext   # extinction opacity, cm^2/g (incl. gas)
+res.albedo, res.g, res.s11, res.s12, res.s33, res.s34, res.angles
+```
+
+`PowerLaw`, `PeakedPowerLaw` (upstream 'ped'), and `TableDistribution`
+(upstream 'table', also `TableDistribution.from_file`) are supported, and
+`dust.read_parameter_file` parses upstream `.in` parameter files directly.
+
+Validated against the upstream reference outputs shipped in
+`bhmie/examples/` (mrn77 and kmh94_full): all quantities agree to better
+than the reference files' 5-significant-digit precision (~5e-5 relative).
+Those full-fidelity runs take ~1 min each and live under the `slow` pytest
+marker (`pytest -m slow`).
 
 ## Installation (development, Windows)
 

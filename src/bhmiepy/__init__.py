@@ -6,8 +6,9 @@ itself derived from Appendix A of Bohren & Huffman (1983) with extensive
 modifications by B. T. Draine. See NOTICE for attribution details.
 """
 
+from . import dust
 from .mie import MieResult, bhmie, compute
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-__all__ = ["MieResult", "bhmie", "compute", "__version__"]
+__all__ = ["MieResult", "bhmie", "compute", "dust", "__version__"]
