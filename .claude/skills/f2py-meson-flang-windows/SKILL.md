@@ -1,6 +1,6 @@
 ---
 name: f2py-meson-flang-windows
-description: Build Python Fortran extension modules on Windows with f2py, meson-python and conda-forge flang (LLVM Flang). Use when creating or repairing a pyproject/meson setup that wraps Fortran for Python on Windows, when a conda env needs a Fortran compiler for f2py, or when a build fails with flang/MSVC errors such as "LNK1104 flang_rt.runtime", "LNK1104 libcmt.lib", "Unknown linker(s): ar/gar", "LNK2001 unresolved external symbol <sub>_", or "ascii codec can't decode byte" from crackfortran.
+description: Build Python Fortran extension modules on Windows with f2py, meson-python and conda-forge flang (LLVM Flang). Use when creating or repairing a pyproject/meson setup that wraps Fortran for Python on Windows, when a conda env needs a Fortran compiler for f2py, when a build fails with flang/MSVC errors such as "LNK1104 flang_rt.runtime", "LNK1104 libcmt.lib", "Unknown linker(s): ar/gar", "LNK2001 unresolved external symbol <sub>_", or "ascii codec can't decode byte" from crackfortran, or when calling legacy Fortran crashes Python with no traceback (exit code -1073741571 / 0xC00000FD stack overflow).
 ---
 
 # f2py + meson + flang on Windows
@@ -53,6 +53,19 @@ meson.build's build subdir. Declaring it in a nested meson.build fails with
 f2py's crackfortran reads sources as ASCII; a UTF-8 em-dash or `©` in a
 comment aborts with `'ascii' codec can't decode byte 0xe2`. Use `--` and
 `(c)`.
+
+## R5 — Keep the f2py-parsed file "F77-clean"; reach Fortran-90 modules through an external bridge
+
+The file passed to the f2py `custom_target` must contain only bare
+subroutines declared with plain `double precision` / `double complex`
+types — no Fortran modules, no `use`, no interface blocks, no named kind
+parameters (f2py's parser mishandles all of these for externally linked
+code, and an unresolvable kind silently corrupts signatures). Reach
+Fortran-90 module code by appending a small bare bridge subroutine after
+`end module` in the module file; its external symbol is what the
+f2py-parsed code calls. This also avoids the silent collision between a
+module procedure name and a same-named F77 external — both would bind to
+the `name_` symbol, calling the wrong routine.
 
 ---
 
@@ -121,6 +134,8 @@ load-bearing details:
 | `FileNotFoundError: <...>-f2pywrappers.f` | custom_target in nested meson.build | R3: move to root |
 | `'ascii' codec can't decode byte ...` in crackfortran | non-ASCII chars in Fortran | R4: pure ASCII |
 | `LNK2001: unresolved external symbol <sub>_` | implementation file only given to f2py, not compiled | R2: add to extension sources |
+| Python process dies, no traceback, exit `-1073741571` (`0xC00000FD`) | legacy F77 local array larger than the 1 MB stack — flang stacks large locals, gfortran moves them to static storage | add `SAVE` to the vendored routine (restores F77 static semantics), record it in the file header |
+| `import` triggers a ninja rebuild that fails (`WinError 2`, or `LNK1104`) | meson-python editable installs rebuild-on-import; the rebuild subprocess runs plain ninja without vcvars/`LIB`/`FFLAGS` | after editing Fortran, rerun the full dev-install script before invoking Python; run Python through an activated env |
 | `Successfully installed` but `import` fails on missing symbol | stale `build/` dir from earlier attempt | delete `build/`, rebuild |
 
 ---

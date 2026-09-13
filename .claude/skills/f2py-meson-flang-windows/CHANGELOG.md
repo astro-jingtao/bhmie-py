@@ -33,3 +33,32 @@ knowledge candidates motivated it. Format: skill-forge
     scope: passed
     provenance: passed
 ```
+
+```yaml
+- date: 2026-09-13
+  action: update
+  skill_name: f2py-meson-flang-windows
+  scope: project
+  path: .claude/skills/f2py-meson-flang-windows/
+  source_candidates:
+    - KC-20260913-001
+  derived_from: []
+  changes:
+    - "new Hard Rule R5 (F77-clean f2py file + external bridge to F90
+      modules) — f2py parser cannot handle modules/use/interfaces/kinds in
+      externally-linked code; bridge also avoids the module-proc vs
+      same-named F77 external symbol collision (both bind to name_)"
+    - "troubleshooting rows: flang stacks large F77 locals -> exit
+      0xC00000FD stack overflow with no traceback, fix with SAVE; meson-
+      python editable rebuild-on-import runs plain ninja without the
+      toolchain env (WinError 2 / LNK1104), rule: full dev-install rerun
+       before invoking Python"
+    - "description gains the 0xC00000FD trigger phrase; meson template
+      comments document the bridge pattern"
+  authorization: ""
+  validation:
+    frontmatter: passed
+    structure: passed
+    scope: passed
+    provenance: passed
+```

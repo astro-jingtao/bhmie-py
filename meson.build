@@ -21,6 +21,7 @@ inc_np = include_directories(incdir_numpy, incdir_f2py)
 
 py.install_sources(
   'src/bhmiepy/__init__.py',
+  'src/bhmiepy/mie.py',
   subdir : 'bhmiepy',
 )
 
@@ -35,6 +36,7 @@ fortran_sources = files(
   'src/bhmiepy/_fortran/bhmiepy_ext.f90',
   'src/bhmiepy/_fortran/types.f90',
   'src/bhmiepy/_fortran/bhmie.f90',
+  'src/bhmiepy/_fortran/bhmie_f77.f',
 )
 
 # For bare subroutines f2py generates the F77-style wrapper

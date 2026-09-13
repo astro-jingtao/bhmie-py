@@ -15,17 +15,30 @@ Bohren & Huffman, *Absorption and Scattering of Light by Small Particles*
 **Status: early development.** The roadmap lives in
 [docs/DEV_PLAN.md](docs/DEV_PLAN.md).
 
-## Planned API (Phase 1)
+## Usage (Phase 1: core routine)
 
 ```python
 import bhmiepy
 
 result = bhmiepy.bhmie(x=2.5, m=1.6 + 0.01j, nang=90)
-result.qext, result.qsca, result.qback, result.g, result.s1, result.s2
+result.qext, result.qsca, result.qback, result.g   # efficiencies
+result.qabs, result.albedo                         # derived
+result.s1, result.s2, result.angles                # amplitudes on 0..pi
+
+# vectorized: x and/or m as arrays, computed in Fortran (no Python loop)
+import numpy as np
+result = bhmiepy.bhmie(np.logspace(-2, 2, 100), 1.6 + 0.01j, nang=90)
+result.qext.shape                                  # (100,)
+
+# physical quantities convenience
+result = bhmiepy.compute(radius=0.1, wavelength=0.25, refractive_index=1.6 + 0.01j)
 ```
 
-with vectorized input (`x` and/or `m` as arrays) computed in Fortran, not in
-a Python loop. Phase 2 adds the dust-population layer of the upstream code:
+Validated against the original F77 BHMIE (bundled as a single-precision
+oracle in the extension), Rayleigh / geometric limits, and energy
+conservation — see `tests/`.
+
+Phase 2 will add the dust-population layer of the upstream code:
 size-distribution averaging, refractive-index tables, scattering matrices,
 and extinction opacities.
 

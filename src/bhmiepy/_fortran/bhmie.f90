@@ -6,7 +6,11 @@
 ! top-level bhmie/ directory of the bhmiepy repository for reference and
 ! testing.
 !
-! Modifications for bhmiepy (relative to the upstream file): none so far.
+! Modifications for bhmiepy (relative to the upstream file): appended the
+! bare external subroutine bhmie_core below "end module" as an explicit-
+! shape, F77-convention bridge so that f2py-wrapped code (bhmiepy_ext.f90)
+! can call the module routine through a stable external symbol. The module
+! itself is unchanged.
 !
 ! ---------------------------------------------------------------------------
 ! Original copyright notice and license (BSD 2-Clause):
@@ -345,3 +349,25 @@ contains
   end subroutine bhmie
 
 end module bhmie_routine
+
+! ===========================================================================
+! bhmiepy addition (not part of upstream bhmie): external-name bridge to
+! the module routine, so f2py-generated code can link against a plain
+! external symbol with an explicit-shape signature.
+! ===========================================================================
+
+subroutine bhmie_core(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
+
+  use types
+  use bhmie_routine, only: bhmie
+  implicit none
+
+  integer, intent(in) :: nang
+  double precision, intent(in) :: x
+  complex(dp), intent(in) :: refrel
+  complex(dp), intent(out) :: s1(2*nang-1), s2(2*nang-1)
+  double precision, intent(out) :: qext, qsca, qback, gsca
+
+  call bhmie(x, refrel, nang, s1, s2, qext, qsca, qback, gsca)
+
+end subroutine bhmie_core
