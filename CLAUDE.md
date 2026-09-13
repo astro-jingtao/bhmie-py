@@ -68,6 +68,10 @@ The repository deliberately mixes code under two licenses:
 
 - C compiler: Visual Studio 2022 BuildTools (`cl`), activated with
   `vcvarsall.bat x64`. Fortran: conda-forge flang (LLVM Flang 23).
+- `scripts/` (dev-install.cmd, test.cmd) is **local-only and untracked**
+  (listed in `.gitignore`): it hardcodes this machine's VS/conda paths and
+  was purged from git history for that reason. Keep using it locally, but
+  never commit it; README carries the general install instructions.
 - Editable install: run `scripts\dev-install.cmd` from the repo root. It
   chains vcvarsall + conda activate and sets the extra environment pieces
   flang needs (`AR`/`RANLIB=llvm-*`, flang runtime dir on `LIB`,

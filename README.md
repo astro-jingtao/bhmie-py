@@ -76,17 +76,28 @@ than the reference files' 5-significant-digit precision (~5e-5 relative).
 Those full-fidelity runs take ~30 s each and live under the `slow` pytest
 marker (`pytest -m slow`).
 
-## Installation (development, Windows)
+## Installation
 
-Requires a conda env with the Fortran/C toolchain (see CLAUDE.md for the
-exact recipe: conda-forge `flang` + `flang-rt_win-64`, meson-python, ninja)
-and Visual Studio Build Tools for the C compiler.
+From a source checkout (not on PyPI):
 
-```powershell
-cmd /c scripts\dev-install.cmd   # build + editable install
-cmd /c scripts\test.cmd          # fast test suite (args pass through to pytest)
-cmd /c scripts\test.cmd -m slow  # golden-data + upstream-equivalence runs
+```bash
+pip install .
 ```
+
+The build compiles Fortran, so a C and a Fortran compiler must be available
+first (e.g. gfortran via your system package manager or conda-forge);
+meson-python, ninja, and numpy are pulled in automatically as build
+requirements. For development:
+
+```bash
+pip install -e . --no-build-isolation   # needs numpy, meson-python, ninja in the env
+pytest                                  # fast test suite
+pytest -m slow                          # golden-data + upstream-equivalence runs
+```
+
+On Windows, a known-good toolchain is conda-forge `flang` **plus
+`flang-rt_win-64`** (the Flang runtime is a separate package) and the MSVC
+C compiler — see CLAUDE.md for the recipe and toolchain notes.
 
 ### Benchmark vs the pristine upstream Fortran
 
@@ -96,8 +107,8 @@ dust-shaped workload (2400 size x wavelength points) the results are
 bitwise identical and the optimized copy is ~2.5-3x faster (the upstream
 code allocates a fixed 16 MB workspace on every call):
 
-```powershell
-cmd /c "call C:\Users\<you>\anaconda3\Scripts\activate.bat bhmiepy && python benchmarks\bench_upstream.py"
+```
+python benchmarks/bench_upstream.py
 ```
 
 ## Repository layout
