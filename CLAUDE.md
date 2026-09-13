@@ -6,7 +6,8 @@ bhmiepy is a Python wrapper (package name `bhmiepy`) around the BHMIE
 Mie-scattering Fortran code from https://github.com/hyperion-rt/bhmie.
 Development is phased: Phase 1 wraps the core single-sphere BHMIE routine;
 Phase 2 wraps the upstream dust-population layer. The authoritative roadmap
-is [docs/DEV_PLAN.md](docs/DEV_PLAN.md) — keep it updated as phases complete.
+is docs/DEV_PLAN.md — **local-only and untracked** (see the
+authoritative-docs note below); keep it updated as phases complete.
 
 ## Authoritative docs — read before relying on any note
 
@@ -15,8 +16,9 @@ is [docs/DEV_PLAN.md](docs/DEV_PLAN.md) — keep it updated as phases complete.
   two steps of the project: (1) repository initialization and (2) writing
   docs/DEV_PLAN.md. Do NOT consult it for any later work — it is not
   maintained and may silently go stale.
-- Authoritative documents: docs/DEV_PLAN.md (roadmap), README.md (overview),
-  this file (working rules).
+- Authoritative documents: docs/DEV_PLAN.md (roadmap — **local-only and
+  untracked**, gitignored like `scripts/` because it is a personal working
+  document), README.md (overview), this file (working rules).
 
 ## Code provenance and licensing rules (important)
 
@@ -105,6 +107,9 @@ The repository deliberately mixes code under two licenses:
   `bhmie/original/bhmie.f` as an independent oracle.
 - Prefer failing loudly over silent fallbacks. Do not hide build/runtime
   errors.
+- Git-tracked content defaults to English. Where Chinese already exists,
+  keep it and add an English rendering alongside — do not delete the
+  Chinese.
 - Temporary and throwaway artifacts stay in the system temp directory or
   project build dirs, never at drive roots or the home directory; clean them
   up when done.

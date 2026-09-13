@@ -12,8 +12,7 @@ Robitaille in [hyperion-rt/bhmie](https://github.com/hyperion-rt/bhmie)
 Bohren & Huffman, *Absorption and Scattering of Light by Small Particles*
 (Wiley, 1983), with extensive modifications by B. T. Draine.
 
-**Status: early development.** The roadmap lives in
-[docs/DEV_PLAN.md](docs/DEV_PLAN.md).
+**Status: early development.**
 
 ## Usage (Phase 1: core routine)
 
@@ -120,7 +119,6 @@ python benchmarks/bench_upstream.py
 | `src/bhmiepy/_fortran/bhmiepy_ext.f90` | New Fortran code written for bhmiepy (MIT) |
 | `bhmie/` | Pristine snapshot of upstream hyperion-rt/bhmie @ `37c0729` — read-only reference & test fixtures |
 | `tests/` | pytest suite |
-| `docs/` | Development plan and design docs |
 
 ## Credits and licenses
 

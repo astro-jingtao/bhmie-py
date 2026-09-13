@@ -10,6 +10,9 @@ __pycache__/
 # Machine-local dev scripts (hardcoded local toolchain paths; kept local on purpose)
 /scripts/
 
+# Local-only development roadmap (personal working document; kept local on purpose)
+/docs/DEV_PLAN.md
+
 # Build artifacts
 build/
 builddir/
