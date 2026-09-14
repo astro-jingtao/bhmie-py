@@ -62,8 +62,11 @@ pytest -m slow                            # golden-data + upstream-equivalence r
 The `upstream/` submodule provides refractive-index tables, recorded
 reference outputs, and the sources for the optional `bhmie_ref`
 executable (built automatically when the submodule is present;
-`-Dupstream_ref=disabled` skips it). A plain `pip install .` without
-the submodule works and runs the fast test suite.
+`-Dupstream_ref=disabled` skips it). A plain `pip install .` also works
+without the submodule — the reference build is simply skipped — but two
+fast parameter-file tests read fixtures from `upstream/examples/`, so
+run the one-line submodule command above before `pytest` (the already
+installed package does not need rebuilding for it).
 
 ## Usage — single spheres
 
