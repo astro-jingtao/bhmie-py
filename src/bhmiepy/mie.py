@@ -134,6 +134,8 @@ def bhmie(x, m, nang: int = 90) -> MieResult:
     _validate_inputs(x_arr, m_arr)
 
     x_b, m_b = np.broadcast_arrays(x_arr, m_arr)
+    if x_b.size == 0:
+        raise ValueError("empty input: x (broadcast against m) has zero elements")
     _check_series_order(x_b, m_b)
 
     shape = x_b.shape

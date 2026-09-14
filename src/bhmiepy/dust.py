@@ -48,7 +48,9 @@ class Material:
     @classmethod
     def from_file(cls, path) -> "Material":
         path = Path(path)
-        data = np.loadtxt(path)
+        # ndmin=2: a single-row file must stay a (1, 3) table, not collapse
+        # to a 1-D array that the column check below would misreport
+        data = np.loadtxt(path, ndmin=2)
         if data.ndim != 2 or data.shape[1] < 3:
             raise ValueError(
                 f"refractive index file {path} must have three columns "
@@ -65,6 +67,13 @@ class Material:
         """New Material interpolated onto ``wav`` (log-log in Re and Im
         separately), mirroring upstream interpolate_material."""
         wav = np.asarray(wav, dtype=np.float64)
+        diff = np.diff(self.wavelengths)
+        if not (np.all(diff >= 0.0) or np.all(diff <= 0.0)):
+            # also false for NaN entries, so non-finite tables are caught
+            # here rather than bisecting to arbitrary intervals downstream
+            raise ValueError(
+                "material wavelengths must be sorted ascending or descending"
+            )
         wmin, wmax = self.wavelengths.min(), self.wavelengths.max()
         if wav.max() > wmax or wav.min() < wmin:
             raise ValueError(
@@ -115,7 +124,8 @@ class TableDistribution:
     @classmethod
     def from_file(cls, path) -> "TableDistribution":
         path = Path(path)
-        data = np.loadtxt(path)
+        # ndmin=2: same single-row concern as Material.from_file
+        data = np.loadtxt(path, ndmin=2)
         if data.ndim != 2 or data.shape[1] < 2:
             raise ValueError(
                 f"size distribution file {path} must have two columns "

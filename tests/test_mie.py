@@ -146,6 +146,14 @@ class TestValidation:
         with pytest.raises(ValueError, match="series order"):
             bhmie(1.0e19, 1.5 + 0.0j, nang=5)
 
+    def test_empty_input_rejected(self):
+        # regression: empty arrays used to surface as a cryptic f2py
+        # "unexpected array size" error instead of a clear message
+        with pytest.raises(ValueError, match="empty input"):
+            bhmie(np.array([]), 1.5 + 0.0j, nang=5)
+        with pytest.raises(ValueError, match="empty input"):
+            bhmie(1.0, np.array([], dtype=complex), nang=5)
+
     def test_large_nang_works(self):
         # regression: nang beyond ~20000 used to overflow the stack (flang
         # stacked the routine's automatic arrays); they are heap-allocated
@@ -221,6 +229,12 @@ class TestCompute:
     def test_compute_vectorized(self):
         got = compute(np.array([0.05, 0.1, 0.2]), 0.25, 1.6 + 0.01j, nang=5)
         assert got.qext.shape == (3,)
+
+    def test_compute_vectorized_wavelength(self):
+        got = compute(0.1, np.array([0.2, 0.3]), 1.5 + 0.01j, nang=5)
+        want = bhmie(2.0 * np.pi * 0.1 / np.array([0.2, 0.3]), 1.5 + 0.01j, nang=5)
+        assert got.qext.shape == (2,)
+        np.testing.assert_allclose(got.qext, want.qext)
 
 
 @pytest.mark.slow

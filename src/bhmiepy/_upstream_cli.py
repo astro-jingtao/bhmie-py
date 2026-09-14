@@ -81,8 +81,8 @@ def find_ref_binary(repo_root: Path | None = None) -> Path:
     raise FileNotFoundError(
         f"{EXE_NAME} (pristine upstream CLI) not found. It is built from the "
         "upstream/ submodule: run 'git submodule update --init --recursive', "
-        "then rebuild the editable install (scripts\\dev-install.cmd on "
-        "Windows, 'pip install -e . --no-build-isolation' elsewhere). "
+        "then reinstall the package from source "
+        "(editable: 'pip install -e . --no-build-isolation'). "
         "Alternatively point BHMIEPY_REF_BIN at the binary, or disable the "
         "target with -Dupstream_ref=disabled."
     )

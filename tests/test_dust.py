@@ -152,8 +152,23 @@ class TestDistributions:
         assert d.weight_number(a[0], a[-1]) == pytest.approx(1.0, abs=1e-12)
         assert d.average_volume() > 0.0
 
+    def test_table_from_file_single_row(self, tmp_path):
+        # regression: np.loadtxt collapsed a one-row file to 1-D, so
+        # from_file rejected a valid two-column table as malformed; parsing
+        # must succeed (normalization then fails loudly, as it should)
+        f = tmp_path / "dist_single.tbl"
+        f.write_text("0.1 1.0\n")
+        dist = dust.TableDistribution.from_file(f)
+        assert dist.a.shape == (1,)
+        with pytest.raises(ValueError, match="total integral"):
+            dust._make_distribution(dist)
+
 
 class TestMaterial:
+    @pytest.fixture(autouse=True)
+    def _tmp_path(self, tmp_path):
+        self.tmp_path = tmp_path
+
     def test_interpolate_loglog(self):
         m = dust.Material(
             wavelengths=np.array([0.5, 1.0, 2.0, 4.0]),
@@ -186,6 +201,33 @@ class TestMaterial:
         m = dust.Material(np.array([2.0]), np.array([1.7 + 0.1j]))
         mi = m.interpolate(np.array([2.0]))
         np.testing.assert_allclose(mi.refractive_indices, [1.7 + 0.1j])
+
+    def test_non_monotonic_wavelengths_rejected(self):
+        # regression: an unsorted table bisected to arbitrary intervals and
+        # silently produced garbage whenever the target stayed inside the
+        # misleading [first, last] window
+        m = dust.Material(
+            wavelengths=np.array([1.0, 10.0, 2.0]),
+            refractive_indices=np.array([1.5 + 0.01j, 1.7 + 0.05j, 1.6 + 0.02j]),
+        )
+        with pytest.raises(ValueError, match="sorted"):
+            m.interpolate(np.array([1.5]))
+
+    def test_from_file_single_row(self):
+        # regression: np.loadtxt collapsed a one-row file to 1-D, so
+        # from_file rejected a valid three-column table as malformed
+        f = self.tmp_path / "ri_single.dat"
+        f.write_text("2.0 1.7 0.1\n")
+        m = dust.Material.from_file(f)
+        assert m.wavelengths.shape == (1,)
+        mi = m.interpolate(np.array([2.0]))
+        np.testing.assert_allclose(mi.refractive_indices, [1.7 + 0.1j])
+
+    def test_from_file_wrong_columns(self):
+        f = self.tmp_path / "ri_bad.dat"
+        f.write_text("1.0 1.5\n2.0 1.6\n")
+        with pytest.raises(ValueError, match="three columns"):
+            dust.Material.from_file(f)
 
 
 class TestDustPipelinePlumbing:
@@ -262,6 +304,25 @@ class TestDustPipelinePlumbing:
         for a, b in zip(out1, out2):
             np.testing.assert_allclose(a, b, rtol=1e-13)
 
+    def test_two_identical_components_equal_single(self):
+        # fast multi-component coverage (the abundance renormalization is
+        # otherwise only exercised by the slow golden runs): splitting one
+        # component into two identical halves with renormalized mass
+        # abundances must reproduce the single-component result exactly,
+        # including kappa_ext and the scattering matrix
+        comp = dust.Component(self._material(), dust.PowerLaw(0.01, 0.3, -3.5), 1.0, 3.3)
+        args = (self.WAV, self.AMIN, self.AMAX, self.NA, self.NANG, self.NSMALL)
+        single = dust.compute_dust_properties([comp], *args, gas_to_dust=100.0)
+        split = dust.compute_dust_properties(
+            [comp, dust.Component(comp.material, comp.distribution, 0.25, 3.3)],
+            *args, gas_to_dust=100.0,
+        )
+        for name in ("cext", "csca", "cback", "kappa_ext", "g", "s11", "s12", "s33", "s34"):
+            np.testing.assert_allclose(
+                getattr(split, name), getattr(single, name), rtol=1e-13,
+                err_msg=name,
+            )
+
 
 class TestDustValidation:
     def test_bad_n_angles(self):
@@ -291,6 +352,22 @@ class TestDustValidation:
     def test_unknown_distribution_type(self):
         with pytest.raises(TypeError, match="unknown size distribution"):
             dust._make_distribution("not-a-distribution")
+
+    def test_nonpositive_abundance_rejected(self):
+        comp = dust.Component(
+            dust.Material(np.array([1.0, 2.0]), np.array([1.5, 1.6])),
+            dust.PowerLaw(0.1, 0.3, -3.5), -1.0, 3.0,
+        )
+        with pytest.raises(ValueError, match="abundance_mass"):
+            dust.compute_dust_properties([comp], [1.0], 0.1, 0.3, 5, 5)
+
+    def test_nonpositive_density_rejected(self):
+        comp = dust.Component(
+            dust.Material(np.array([1.0, 2.0]), np.array([1.5, 1.6])),
+            dust.PowerLaw(0.1, 0.3, -3.5), 1.0, 0.0,
+        )
+        with pytest.raises(ValueError, match="density"):
+            dust.compute_dust_properties([comp], [1.0], 0.1, 0.3, 5, 5)
 
     def test_series_order_guard_on_dust_path(self):
         # regression: the dust path used to bypass mie.bhmie's series-order
@@ -355,6 +432,26 @@ class TestParameterFile:
         assert inp.output_format == 2
         assert all(isinstance(c.distribution, dust.TableDistribution) for c in inp.components)
         assert inp.components[0].distribution.a.size > 0
+
+    def test_parse_ped_distribution(self, tmp_path):
+        # 'ped' is the one distribution type no shipped example file uses
+        ri = tmp_path / "ri.dat"
+        ri.write_text("0.5 1.6 0.1\n2.0 1.5 0.01\n")
+        pf = tmp_path / "model.in"
+        pf.write_text(
+            "'model'\n1\n0.01\n1.0\n5\n5\n0\n1\n100\n0.5 2.0 3\n"
+            "sep\n1.0\n3.0\nri.dat\nped\n0.01 0.15 -3.5\n"
+        )
+        inp = dust.read_parameter_file(pf)
+        dist = inp.components[0].distribution
+        assert isinstance(dist, dust.PeakedPowerLaw)
+        assert (dist.amin, dist.aturn, dist.apower) == (0.01, 0.15, -3.5)
+
+    def test_truncated_file_raises(self, tmp_path):
+        pf = tmp_path / "short.in"
+        pf.write_text("'model'\n1\n0.01\n0.1\n5\n5\n0\n1\n100\n")
+        with pytest.raises(ValueError, match="ended early"):
+            dust.read_parameter_file(pf)
 
     def test_blank_lines_and_plain_separator_accepted(self, tmp_path):
         # regression: upstream list-directed reads skip blank records and
