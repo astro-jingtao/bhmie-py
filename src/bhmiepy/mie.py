@@ -119,6 +119,25 @@ def bhmie(x, m, nang: int = 90) -> MieResult:
         results of the broadcast shape (amplitudes: ``(2*nang - 1,) +
         shape``).
 
+    Examples
+    --------
+    Single sphere:
+
+    >>> import bhmiepy
+    >>> res = bhmiepy.bhmie(x=2.5, m=1.6 + 0.01j, nang=90)
+    >>> round(float(res.qext), 4)
+    3.5352
+    >>> res.s1.shape  # amplitudes at 179 angles from 0 to pi
+    (179,)
+
+    Vectorized over an array of size parameters (the loop stays in
+    Fortran):
+
+    >>> import numpy as np
+    >>> res = bhmiepy.bhmie(np.logspace(-2, 2, 100), 1.6 + 0.01j, nang=90)
+    >>> res.qext.shape
+    (100,)
+
     Notes
     -----
     The heavy loop runs in Fortran. Each call allocates a workspace of
@@ -179,6 +198,14 @@ def compute(radius, wavelength, refractive_index, nang: int = 90) -> MieResult:
     -------
     MieResult
         Same as :func:`bhmie`.
+
+    Examples
+    --------
+    >>> import bhmiepy
+    >>> res = bhmiepy.compute(radius=0.1, wavelength=0.25,
+    ...                       refractive_index=1.6 + 0.01j)
+    >>> round(float(res.qsca), 4)
+    3.4381
     """
     radius = np.asarray(radius, dtype=np.float64)
     wavelength = np.asarray(wavelength, dtype=np.float64)

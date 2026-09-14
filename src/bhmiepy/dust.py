@@ -40,7 +40,11 @@ _PI_UPSTREAM = 3.1415926
 @dataclass
 class Material:
     """Tabulated refractive index m(lambda): wavelengths in micron (ascending
-    or descending, as in the upstream ri-data files), complex indices."""
+    or descending, as in the upstream ri-data files), complex indices.
+
+    ``from_file`` reads the upstream three-column format (wavelength in
+    micron, Re(m), Im(m)), e.g. the tables under ``upstream/examples/ri-data``.
+    """
 
     wavelengths: np.ndarray
     refractive_indices: np.ndarray
@@ -311,6 +315,52 @@ def compute_dust_properties(
         Extra fine angles near 0 degrees (also mirrored near 180).
     gas_to_dust : float, optional
         Gas-to-dust mass ratio for the opacity (0 for dust-only).
+
+    Returns
+    -------
+    DustResult
+        See :class:`DustResult`.
+
+    Examples
+    --------
+    A silicate-like material with a power-law size distribution
+    (refractive-index tables usually come from a file -- see
+    :meth:`Material.from_file` and ``upstream/examples/ri-data`` for
+    the format):
+
+    >>> import numpy as np
+    >>> from bhmiepy import dust
+    >>> material = dust.Material(
+    ...     wavelengths=np.array([0.3, 1.0, 5.0]),
+    ...     refractive_indices=np.array([1.7 + 0.5j, 1.6 + 0.1j, 1.5 + 0.01j]),
+    ... )
+    >>> comp = dust.Component(
+    ...     material=material,
+    ...     distribution=dust.PowerLaw(0.005, 0.25, -3.5),  # n(a) ~ a^-3.5
+    ...     abundance_mass=1.0,
+    ...     density=3.3,  # g/cm^3
+    ... )
+    >>> res = dust.compute_dust_properties(
+    ...     [comp],
+    ...     wavelengths=np.array([0.5, 1.0, 2.0]),
+    ...     amin=0.005, amax=1.0, na=100,
+    ...     n_angles=31, n_small_angles=3,
+    ...     gas_to_dust=100.0,
+    ... )
+    >>> round(float(res.kappa_ext[0]), 1)  # cm^2/g (incl. gas)
+    259.9
+    >>> round(float(res.albedo[0]), 4)
+    0.3894
+
+    ``dust.read_parameter_file`` parses upstream ``.in`` parameter files
+    directly, so existing upstream models can be recomputed as a library
+    call:
+
+    >>> inp = dust.read_parameter_file("upstream/examples/mrn77/mrn77.in")  # doctest: +SKIP
+    >>> res = dust.compute_dust_properties(  # doctest: +SKIP
+    ...     inp.components, inp.wavelengths, inp.amin, inp.amax, inp.na,
+    ...     inp.n_angles, inp.n_small_angles, inp.gas_to_dust,
+    ... )
     """
     n_angles = operator.index(n_angles)
     n_small_angles = operator.index(n_small_angles)
