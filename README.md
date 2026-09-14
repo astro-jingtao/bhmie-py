@@ -113,8 +113,10 @@ Two independent A/B benchmarks (both separate from the pytest suite):
 - `benchmarks/bench_upstream.py` — core routine: the package's optimized
   BHMIE copy vs a verbatim upstream copy compiled into the same extension.
   On a dust-shaped workload (2400 size x wavelength points) the results
-  are bitwise identical and the optimized copy is ~2.5-3x faster (the
-  upstream code allocates a fixed 16 MB workspace on every call).
+  are bitwise identical and the package copy shows no measurable
+  performance degradation; any speedup is compiler-dependent — parity
+  with gfortran, ~2-3x with LLVM flang (whose codegen is more sensitive
+  to the upstream copy's fixed 16 MB per-call workspace).
 - `benchmarks/bench_dust_upstream.py` — dust pipeline (Phase 2): the
   library vs the upstream CLI itself (`bhmie_ref`), built verbatim from
   the `bhmie/` submodule by meson (`-Dupstream_ref`, auto-enabled when

@@ -78,7 +78,8 @@ def main():
     if not identical:
         raise SystemExit("FAIL: results differ between optimized and upstream copies")
     print("\nOK: results are identical; performance "
-          f"{'leads' if t_ours <= t_upstream else 'TRAILS'} the pristine upstream")
+          f"{'matches or exceeds' if t_ours <= t_upstream else 'TRAILS'} "
+          "the pristine upstream")
 
 
 if __name__ == "__main__":
