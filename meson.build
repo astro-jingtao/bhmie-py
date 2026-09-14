@@ -90,6 +90,15 @@ endif
 if upstream_ref.disabled() or not upstream_ref_ready
   summary({'bhmie_ref (upstream CLI)' : 'not built'}, section : 'upstream reference')
 else
+  # -mllvm --ignore-missing-type-desc is an LLVM-flang-only escape hatch
+  # (see comment at the executable below); gfortran rejects -mllvm outright,
+  # so scope the flag to the llvm-flang compiler id (meson calls classic
+  # flang 'flang' and gfortran 'gcc').
+  fc = meson.get_compiler('fortran')
+  upstream_ref_fortran_args = []
+  if fc.get_id() == 'llvm-flang'
+    upstream_ref_fortran_args = ['-mllvm', '--ignore-missing-type-desc']
+  endif
   upstream_ref_link_args = []
   if host_machine.system() == 'windows'
     # upstream's compute_dust_properties keeps megabytes of automatic
@@ -108,14 +117,14 @@ else
     'upstream/src/bhmie.f90',
     'upstream/src/bhmie_caller.f90',
     'upstream/src/main.f90',
-    # flang 23 aborts on upstream material.f90/distributions.f90 with
-    # "runtime derived type info descriptor was not generated" (derived
+    # LLVM flang 23 aborts on upstream material.f90/distributions.f90
+    # with "runtime derived type info descriptor was not generated" (derived
     # types with allocatable components as intent(out) dummies). The flag
     # the diagnostic itself names skips those descriptors; they only feed
     # runtime diagnostics, and the A/B outputs (compared against the
     # recorded golden files) verify the binary stays correct. No source
     # changes to the pristine upstream code.
-    fortran_args : ['-mllvm', '--ignore-missing-type-desc'],
+    fortran_args : upstream_ref_fortran_args,
     link_args : upstream_ref_link_args,
     install : false,
   )
