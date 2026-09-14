@@ -382,37 +382,46 @@ def compute_dust_properties(
     csca = np.zeros(nwav)
     cback = np.zeros(nwav)
     gsca = np.zeros(nwav)
-    s11 = np.zeros((nwav, nang2))
-    s12 = np.zeros((nwav, nang2))
-    s33 = np.zeros((nwav, nang2))
-    s34 = np.zeros((nwav, nang2))
+    # Fortran-ordered: bhmie_dust_accum accumulates into them in place
+    # (intent(inout)); converted back to C order in the result below.
+    s11 = np.zeros((nwav, nang2), order="F")
+    s12 = np.zeros((nwav, nang2), order="F")
+    s33 = np.zeros((nwav, nang2), order="F")
+    s34 = np.zeros((nwav, nang2), order="F")
 
+    # Main loop, one extension call per component: the core computation and
+    # the weighted accumulation both happen in Fortran (bhmie_dust_accum),
+    # so the huge per-point s1/s2 amplitude arrays never cross into Python
+    # (materializing and reducing them in NumPy dominated the pipeline's
+    # non-core runtime; the summation order now matches upstream's own
+    # sequential per-bin loop).
     for ic, (dist, mat) in enumerate(zip(dists, materials)):
-        for ia in range(na):
-            weight = dist.weight_number(a_lo[ia], a_hi[ia]) * abundance_number[ic]
-            # upstream semantics: 'if (weight_number > 0)' -- false for NaN,
-            # so a non-finite weight skips the bin instead of poisoning the
-            # accumulators (construction-time checks reject the known causes)
-            if not (weight > 0.0):
-                continue
-            a = a_mid[ia]
-            # microns -> cm^2: pi*a^2 * 1e-8
-            cross_section = np.pi * a * a * 1.0e-8
-            x = 2.0 * np.pi * a / wavelengths
-            qext, qsca, qback, g, s1, s2 = _bhmiepy_ext.bhmie_vec_ang(
-                x, mat.refractive_indices, angles=angles
+        weights = (
+            np.array(
+                [dist.weight_number(lo, hi) for lo, hi in zip(a_lo, a_hi)]
             )
-            cext += qext * cross_section * weight
-            csca += qsca * cross_section * weight
-            cback += qback * cross_section * weight
-            gsca += g * qsca * cross_section * weight
-            a1sq = np.abs(s1) ** 2
-            a2sq = np.abs(s2) ** 2
-            s11 += weight * (0.5 * (a1sq + a2sq)).T
-            s12 += weight * (0.5 * (-a1sq + a2sq)).T
-            s2cs1 = s2 * np.conj(s1)
-            s33 += weight * s2cs1.real.T
-            s34 += weight * s2cs1.imag.T
+            * abundance_number[ic]
+        )
+        # upstream semantics: 'if (weight_number > 0)' -- false for NaN, so
+        # a non-finite weight skips the bin instead of poisoning the
+        # accumulators (construction-time checks reject the known causes)
+        keep = np.nonzero(weights > 0.0)[0]
+        if keep.size == 0:
+            # no contributing bin: nothing to accumulate (upstream's loop
+            # body simply never runs; the zero-scattering check below is
+            # the loud failure). Also avoids a zero-size f2py call.
+            continue
+        a = a_mid[keep]
+        w = weights[keep]
+        # microns -> cm^2: pi*a^2 * 1e-8
+        cross = np.pi * a * a * 1.0e-8
+        x = 2.0 * np.pi * a[:, None] / wavelengths[None, :]
+        m = np.broadcast_to(mat.refractive_indices, (keep.size, nwav))
+        _bhmiepy_ext.bhmie_dust_accum(
+            x=x, m=m, weights=w, cross=cross, angles=angles,
+            cext=cext, csca=csca, cback=cback, gsca=gsca,
+            s11=s11, s12=s12, s33=s33, s34=s34,
+        )
 
     kappa_ext = cext * np.sum(abundance_mass / average_particle_mass)
     kappa_ext = kappa_ext / (1.0 + gas_to_dust)
@@ -435,10 +444,10 @@ def compute_dust_properties(
         cback=cback,
         kappa_ext=kappa_ext,
         g=gsca,
-        s11=s11,
-        s12=s12,
-        s33=s33,
-        s34=s34,
+        s11=np.ascontiguousarray(s11),
+        s12=np.ascontiguousarray(s12),
+        s33=np.ascontiguousarray(s33),
+        s34=np.ascontiguousarray(s34),
     )
 
 

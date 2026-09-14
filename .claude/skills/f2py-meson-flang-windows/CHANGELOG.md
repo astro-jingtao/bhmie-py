@@ -141,3 +141,25 @@ knowledge candidates motivated it. Format: skill-forge
     scope: passed
     provenance: passed
 ```
+
+```yaml
+- date: 2026-09-14
+  action: update
+  skill_name: f2py-meson-flang-windows
+  scope: project
+  path: .claude/skills/f2py-meson-flang-windows/
+  source_candidates:
+    - KC-20260913-001
+  derived_from: []
+  changes:
+    - "troubleshooting row: zero-size arrays passed to f2py-wrapped
+      routines fail with 'unexpected array size: new_size=1, got array
+      with arr_size=0' -- guard empty batches Python-side before the call
+      (dust perf round, bhmie_dust_accum empty-keep path)"
+  authorization: ""
+  validation:
+    frontmatter: passed
+    structure: passed
+    scope: passed
+    provenance: passed
+```
