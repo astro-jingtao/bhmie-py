@@ -110,3 +110,34 @@ knowledge candidates motivated it. Format: skill-forge
     scope: passed
     provenance: passed
 ```
+
+```yaml
+- date: 2026-09-14
+  action: update
+  skill_name: f2py-meson-flang-windows
+  scope: project
+  path: .claude/skills/f2py-meson-flang-windows/
+  source_candidates:
+    - KC-20260913-001
+  derived_from: []
+  changes:
+    - "troubleshooting rows from the Phase 2 upstream-A/B round: (a) flang 23
+      aborts 'runtime derived type info descriptor was not generated' on
+      derived types with allocatable components as intent(out) dummies ->
+      per-target fortran_args ['-mllvm', '--ignore-missing-type-desc'] (kebab
+      spelling; the diagnostic's camelCase name is rejected), validate
+      outputs afterwards; (b) second 0xC00000FD flavor: MB-scale automatic
+      arrays vs Windows' 1 MB stack reserve -> '-Wl,/STACK:67108864' link
+      arg guarded by host_machine.system(), no source edits to pristine
+      upstream code; (c) meson-python editable artifacts live in
+      build/<python-tag>/ — scan build/ one level deep for non-installed
+      targets; regeneration also fires after 'meson configure -D...'"
+    - "description gains the RTTI-abort trigger phrase and covers running
+      (not only calling) legacy Fortran"
+  authorization: ""
+  validation:
+    frontmatter: passed
+    structure: passed
+    scope: passed
+    provenance: passed
+```

@@ -1,3 +1,0 @@
-[submodule "src/fortranlib"]
-	path = src/fortranlib
-	url = http://github.com/astrofrog/fortranlib.git

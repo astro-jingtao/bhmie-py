@@ -30,10 +30,11 @@ The repository deliberately mixes code under two licenses:
   - never delete or alter the license header block at the top of the file;
   - update the "Modifications for bhmiepy (relative to the upstream file)"
     line in the header whenever a change diverges from upstream.
-- `src/bhmiepy/_fortran/bhmie_f77.f` — verbatim copy of the original F77
+- `src/bhmiepy/_fortran/ref/bhmie_f77.f` — verbatim copy of the original F77
   BHMIE (plus a header and one SAVE statement, both documented in the
-  header). Same BSD-2-Clause terms; keep it unmodified.
-- `src/bhmiepy/_fortran/bhmie_upstream.f90` — pristine copy of upstream
+  header). Same BSD-2-Clause terms; keep it unmodified. Lives in
+  `_fortran/ref/` with the other comparison-only sources.
+- `src/bhmiepy/_fortran/ref/bhmie_upstream.f90` — pristine copy of upstream
   `src/bhmie.f90` (module renamed `bhmie_routine_upstream` so it can
   coexist with the package copy in one build; a bridge subroutine was
   appended). BSD-2-Clause, same rules: keep the body verbatim, record any
@@ -46,13 +47,19 @@ The repository deliberately mixes code under two licenses:
   numerical conventions — do not "simplify" its formulas away from the
   fortranlib originals (golden tests depend on them).
 - `src/bhmiepy/_fortran/bhmiepy_ext.f90` and everything under `src/bhmiepy/`
-  except the two files above — new code written for bhmiepy, **MIT**.
-- `bhmie/` — pristine snapshot of upstream hyperion-rt/bhmie at commit
-  `37c072909a67d1027120762680a1c0b350875398` (its `.git` was removed on
-  purpose when it was folded into this repository). It is a **read-only**
-  reference and test-fixture source (`bhmie/examples/` holds refractive-index
-  tables and reference outputs). Never build from it and never edit it; the
-  live copies are in `src/bhmiepy/_fortran/`.
+  except the upstream-/fortranlib-derived files listed above — new code
+  written for bhmiepy, **MIT**.
+- `upstream/` — git submodule (name `bhmie`, path `upstream`) of
+  hyperion-rt/bhmie pinned at commit
+  `37c072909a67d1027120762680a1c0b350875398`, with its own `fortranlib`
+  submodule (`git submodule update --init --recursive` after clone). It is a
+  **read-only** reference and test-fixture source (`upstream/examples/`
+  holds refractive-index tables and reference outputs), and the source of
+  the optional `bhmie_ref` executable that meson builds verbatim for A/B
+  benchmarking (`-Dupstream_ref`; auto-enabled when the submodule is
+  initialized, skipped otherwise so plain user builds never need it). Never
+  edit it; the live copies are in `src/bhmiepy/_fortran/` (comparison-only
+  copies in `src/bhmiepy/_fortran/ref/`).
 - Attribution obligations live in `NOTICE`, `LICENSE` (MIT), and
   `LICENSES/BSD-2-Clause-bhmie.txt`. Keep them in sync when files move.
 
@@ -82,9 +89,12 @@ The repository deliberately mixes code under two licenses:
   before vcvarsall has run and breaks the MSVC library search.
 - Run tests: `scripts\test.cmd` (fast suite) / `scripts\test.cmd -m slow`
   (golden-data + upstream-equivalence runs) / pass any pytest args through.
-- Benchmark vs pristine upstream Fortran:
-  `python benchmarks\bench_upstream.py` (activated env) — asserts identical
-  results and reports the timing comparison.
+- Benchmark vs pristine upstream Fortran (both independent of the pytest
+  suite): `python benchmarks\bench_upstream.py` (core routine: asserts
+  identical results, reports timings) and
+  `python benchmarks\bench_dust_upstream.py` (dust pipeline vs the
+  `bhmie_ref` CLI built from the submodule; compares at upstream
+  output-file precision, reports end-to-end timings).
 - Rebuild after touching only Python files is unnecessary (editable); after
   touching Fortran or meson.build, rerun `scripts\dev-install.cmd` (a stale
   build makes the import-time rebuild fail and breaks `test.cmd`). If meson
@@ -103,8 +113,9 @@ The repository deliberately mixes code under two licenses:
   `src/bhmiepy/_fortran/bhmiepy_ext.f90` (the Python-facing wrapper); other
   Fortran files are compiled directly by meson.
 - Tests: pytest, class-based style, lightweight and fast. Reference data for
-  validation comes from `bhmie/examples/` and from compiling
-  `bhmie/original/bhmie.f` as an independent oracle.
+  validation comes from `upstream/examples/` and from the vendored F77
+  oracle `src/bhmiepy/_fortran/ref/bhmie_f77.f` (copied from
+  `upstream/original/bhmie.f`).
 - Prefer failing loudly over silent fallbacks. Do not hide build/runtime
   errors.
 - Git-tracked content defaults to English. Where Chinese already exists,

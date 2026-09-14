@@ -10,7 +10,7 @@ Numerical conventions follow upstream exactly (log-log interpolation and
 integration from fortranlib, ported in ``_loglog.py``; units: micron for
 sizes/wavelengths, g/cm^3 for grain density, cm^2 for cross-sections,
 cm^2/g for opacity), so results match the upstream CLI tool; the golden
-tests validate that against the reference outputs shipped in ``bhmie/examples``.
+tests validate that against the reference outputs shipped in ``upstream/examples``.
 """
 
 from __future__ import annotations
@@ -475,7 +475,7 @@ def _floats(line: str, n: int):
 
 
 def read_parameter_file(path) -> DustInputFile:
-    """Read an upstream bhmie parameter file (see bhmie/README.md for the
+    """Read an upstream bhmie parameter file (see upstream/README.md for the
     format). Blank lines are skipped and component separators are consumed
     like the upstream CLI's list-directed reads (any single record). Relative
     refractive-index and table paths are resolved against the parameter

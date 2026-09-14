@@ -10,7 +10,7 @@ import bhmiepy
 from bhmiepy import dust
 from bhmiepy._loglog import integral_loglog, integral_loglog_subset, interp1d_loglog, logspace
 
-EXAMPLES = Path(__file__).resolve().parents[1] / "bhmie" / "examples"
+EXAMPLES = Path(__file__).resolve().parents[1] / "upstream" / "examples"
 
 
 class TestLoglogPort:

@@ -1,0 +1,6 @@
+option(
+  'upstream_ref',
+  type : 'feature',
+  value : 'auto',
+  description : 'Build the pristine upstream bhmie CLI (bhmie_ref) verbatim from the bhmie/ submodule, for A/B benchmarking and the slow upstream-equivalence test',
+)

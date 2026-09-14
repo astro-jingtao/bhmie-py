@@ -53,7 +53,7 @@
 ! The underlying BHMIE subroutine originates from Appendix A of
 ! Bohren & Huffman, "Absorption and Scattering of Light by Small Particles"
 ! (Wiley, 1983), with extensive modifications by B. T. Draine (see the
-! history log in bhmie/original/bhmie.f in the upstream snapshot).
+! history log in upstream/original/bhmie.f in the upstream submodule).
 ! ===========================================================================
 
 module bhmie_routine

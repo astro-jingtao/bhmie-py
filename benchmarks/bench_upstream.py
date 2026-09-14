@@ -6,7 +6,7 @@ Both variants are compiled into the extension:
                           src/bhmiepy/_fortran/bhmie.f90 header)
   - bhmie_vec_upstream -- pristine upstream body incl. the original
                           allocate(d(nmxx)) 16 MB workspace per call
-                          (src/bhmiepy/_fortran/bhmie_upstream.f90)
+                          (src/bhmiepy/_fortran/ref/bhmie_upstream.f90)
 
 The script asserts the two produce IDENTICAL results (same algorithm,
 only allocation strategy differs) and reports wall-clock times.
