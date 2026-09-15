@@ -120,6 +120,12 @@ jobs:
         run: |
           export CC=cl
           export FC=flang-new
+          # Git Bash's /usr/bin comes first in the login-shell PATH and
+          # its coreutils link.exe shadows MSVC's linker; put the pinned
+          # cl's directory first so meson finds the real link.exe next to
+          # it. (The dev machine never sees this: dev-install.cmd runs
+          # under cmd.exe + vcvarsall, where MSVC is already first.)
+          export PATH="$(dirname "$(command -v cl)"):$PATH"
           export AR=llvm-ar
           export RANLIB=llvm-ranlib
           export FFLAGS="-static-libflangrt"
@@ -135,12 +141,25 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then
             export CC=gcc
             export FC=gfortran
+            # Static-link the whole Fortran runtime: the .pyd must not
+            # depend on libgfortran/libquadmath/libwinpthread DLLs that
+            # only exist inside an MSYS2 installation. (-static-libgcc
+            # alone leaves libwinpthread dynamic; the -Bstatic pair
+            # wraps just that one library.)
             export FFLAGS="-static-libgfortran -static-libgcc"
-            export LDFLAGS="-static-libgfortran -static-libgcc"
+            export LDFLAGS="-static-libgfortran -static-libgcc -static-libquadmath -Wl,-Bstatic,-lwinpthread,-Wl,-Bdynamic"
             gfortran --version | head -n 1
             gcc --version | head -n 1
           fi
           python -m pip install -e . --no-build-isolation
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # Surface any remaining DLL dependency here, in the build
+            # step, instead of as an opaque test-time ImportError.
+            if command -v ldd >/dev/null 2>&1; then
+              ldd "$(ls build/*/_bhmiepy_ext*.pyd | head -n 1)" || true
+            fi
+            python -c "import bhmiepy"
+          fi
 
       - name: Fast test suite
         run: python -m pytest
