@@ -10,10 +10,6 @@ jobs:
     name: ${{ matrix.os }} / py${{ matrix.python-version }} / numpy ${{ matrix.numpy }}${{ matrix.fortran == 'gfortran' && ' / gfortran' || '' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    # The Windows mingw-gfortran corner (include below) is experimental:
-    # flang + MSVC is the documented and supported Windows toolchain, so
-    # that corner's failure must not block the matrix.
-    continue-on-error: ${{ matrix.fortran == 'gfortran' }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,12 +26,12 @@ jobs:
           - python-version: '3.13'
             numpy: '1.26'
         include:
-          # Experimental corners: build with the runner image's mingw
-          # gfortran (gcc + gfortran, plain pip deps, no MSVC/micromamba),
-          # mirroring the Windows flang cells one for one. Guards the
-          # "pip install from sdist with mingw on PATH" user path while
-          # no wheels are published. Still continue-on-error until the
-          # recipe goes green end-to-end.
+          # Windows cells built with the runner image's mingw gfortran
+          # (gcc + gfortran, plain pip deps, no MSVC/micromamba),
+          # mirroring the Windows flang cells one for one: the mingw
+          # install path documented in the README while no wheels are
+          # published. Blocking coverage since the recipe went green
+          # end-to-end (2026-09-15, run 6).
           - os: windows-latest
             python-version: '3.10'
             numpy: '1.26'
@@ -130,8 +126,7 @@ jobs:
       # --- Build and test -------------------------------------------------
       # Editable install keeps the build tree (with the optional bhmie_ref
       # executable) where the slow equivalence tests can find it. The
-      # Windows flang tweaks mirror scripts/dev-install.cmd (see the
-      # project CLAUDE.md "Development environment" section):
+      # Windows flang tweaks below (rationale also in README Installation):
       #   CC/FC     - windows-latest ships an MSYS2 gcc/gfortran; pin the
       #               MSVC C compiler and the conda flang so meson cannot
       #               pick gfortran, which rejects -static-libflangrt in

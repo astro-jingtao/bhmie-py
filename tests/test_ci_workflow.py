@@ -75,14 +75,16 @@ class TestWindowsGfortranCorner:
             "would merge into an existing job instead of adding one"
         )
 
-    def test_gfortran_corner_is_experimental(self):
+    def test_gfortran_corner_is_required(self):
         text = CI_FILE.read_text(encoding="utf-8")
         assert re.search(r"fortran:\s*'gfortran'", text), (
             "gfortran include entry not found in ci.yml"
         )
-        assert "continue-on-error: ${{ matrix.fortran == 'gfortran' }}" in (
-            text
-        ), "the gfortran corner must stay continue-on-error (experimental)"
+        assert "continue-on-error" not in text, (
+            "the gfortran corner is regular blocking coverage now; "
+            "re-adding continue-on-error must be a conscious decision, "
+            "not a leftover"
+        )
 
 
 class TestPeImports:

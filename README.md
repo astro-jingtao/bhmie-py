@@ -22,42 +22,133 @@ parameters.
 
 ## Installation
 
-From a source checkout:
+**bhmiepy is not on PyPI yet** — install from a source checkout. Besides
+Python >= 3.10 you need a C and a Fortran compiler; numpy, meson-python,
+and ninja are pulled in automatically as build requirements, so a plain
+`pip install .` is all it takes once the compilers are set up.
+
+### Linux
 
 ```bash
+sudo apt install gfortran        # or your distribution's equivalent
 pip install .
 ```
 
-Requirements: Python >= 3.10, numpy >= 1.26, and a C and a Fortran
-compiler. The build uses meson-python + f2py; meson-python, ninja, and
-numpy are pulled in automatically as build requirements.
+### macOS
 
-On Linux and macOS, gfortran from your system package manager
-(`sudo apt install gfortran` / `brew install gcc`) is sufficient.
-
-On **Windows**, a known-good toolchain is conda-forge `flang` **plus
-`flang-rt_win-64`** (the Flang runtime is a separate package) together
-with the MSVC C compiler (e.g. from Visual Studio Build Tools):
-
-```
-conda create -n bhmiepy -c conda-forge python numpy meson-python ninja pytest pip flang flang-rt_win-64
+```bash
+brew install gcc                 # provides gfortran
+pip install .
 ```
 
-Build from an environment that has run `vcvarsall.bat x64` and activated
-the conda env, with the following additions (the conda flang packaging
-needs them; see the project's CLAUDE.md for the rationale):
-`AR=llvm-ar`, `RANLIB=llvm-ranlib`, the flang resource directory's
-`lib\x86_64-pc-windows-msvc` appended to `LIB`, and
-`FFLAGS=-static-libflangrt`.
+### Windows
+
+Two toolchains are known to work; both are exercised in CI on every
+push. Pick either one — set the environment up first, then run
+`pip install .` from the same shell.
+
+#### Option A — conda-forge flang + MSVC
+
+1. Install the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+   (or Visual Studio itself) with the *Desktop development with C++*
+   workload. This provides the C compiler (`cl`) and the linker.
+
+2. Create a conda environment with Fortran and the build tools (any
+   prompt works for this step):
+
+   ```
+   conda create -n bhmiepy -c conda-forge python numpy meson-python ninja pip flang flang-rt_win-64
+   ```
+
+   `flang` is the LLVM Fortran compiler and `flang-rt_win-64` its
+   runtime — the runtime is a separate package, and without it linking
+   fails with `LNK1104: flang_rt.runtime.*.lib`.
+
+3. Open an **x64 Native Tools Command Prompt for VS** from the Start
+   menu (or run `vcvarsall.bat x64` in a `cmd` prompt), and activate
+   the environment *in that prompt*:
+
+   ```
+   conda activate bhmiepy
+   ```
+
+4. Set the extra variables the conda flang packaging needs — one line
+   each in the same prompt (typed interactively; inside a `.cmd`
+   script write `%%i`. In PowerShell use `$env:AR = "llvm-ar"`-style
+   assignments instead):
+
+   ```
+   set AR=llvm-ar
+   set RANLIB=llvm-ranlib
+   for /f %i in ('flang-new --print-resource-dir') do set "LIB=%LIB%;%i\lib\x86_64-pc-windows-msvc"
+   set FFLAGS=-static-libflangrt
+   ```
+
+   Why each one: meson searches for `ar`/`ranlib`, but the conda
+   environment only ships the `llvm-*` names; the MSVC linker does not
+   know where the flang runtime library lives, so its directory is
+   appended to `LIB`; and conda's flang ships no runtime DLL, so the
+   Fortran code must be compiled against the static runtime
+   (`FFLAGS`).
+
+5. Build and install:
+
+   ```
+   pip install .
+   ```
+
+#### Option B — mingw-w64 gfortran
+
+1. Install [MSYS2](https://www.msys2.org/), then the UCRT64 Fortran
+   toolchain from an MSYS2 shell (or any mingw-w64 distribution such
+   as [WinLibs](https://winlibs.com/)):
+
+   ```
+   pacman -S mingw-w64-ucrt-x86_64-gcc-fortran
+   ```
+
+2. In a `cmd` prompt with the toolchain's `bin` directory on `PATH`
+   (for MSYS2 typically `set PATH=C:\msys64\ucrt64\bin;%PATH%`), set:
+
+   ```
+   set CC=gcc
+   set FC=gfortran
+   set FFLAGS=-static-libgfortran -static-libgcc
+   set LDFLAGS=-static-libgfortran -static-libgcc -static-libquadmath -Wl,-Bstatic -lgfortran -lquadmath -lwinpthread -Wl,-Bdynamic
+   ```
+
+   The `LDFLAGS` line statically links the Fortran runtime into the
+   extension and is **not optional**: since Python 3.8 the interpreter
+   no longer resolves a module's DLL dependencies from `PATH`, so a
+   dynamically linked `libgfortran-5.dll` makes `import bhmiepy` fail
+   with an unhelpful "DLL load failed" error.
+
+3. Build and install:
+
+   ```
+   pip install .
+   ```
 
 ### Development
 
 ```bash
-git submodule update --init --recursive   # test fixtures + optional reference build
+git clone --recurse-submodules https://github.com/astro-jingtao/bhmie-py
+cd bhmie-py
 pip install -e . --no-build-isolation     # needs numpy, meson-python, ninja in the env
 pytest                                    # fast test suite
 pytest -m slow                            # golden-data + upstream-equivalence runs
 ```
+
+On Windows, build with either option's toolchain and environment
+settings above (add `pytest` to the environment). The `upstream/`
+submodule provides refractive-index tables, recorded reference outputs,
+and the sources for the optional `bhmie_ref` executable (built
+automatically when the submodule is present; `-Dupstream_ref=disabled`
+skips it). A plain `pip install .` also works without the submodule —
+the reference build is simply skipped — but two fast parameter-file
+tests read fixtures from `upstream/examples/`, so run
+`git submodule update --init --recursive` before `pytest` (the already
+installed package does not need rebuilding for it).
 
 The `upstream/` submodule provides refractive-index tables, recorded
 reference outputs, and the sources for the optional `bhmie_ref`
@@ -138,7 +229,8 @@ call.
   (~5e-5 relative). Those full-fidelity runs take ~30 s each and live
   under the `slow` pytest marker.
 - CI runs the full test matrix (Ubuntu/macOS/Windows × Python 3.10–3.13
-  × numpy 1.26/2.x).
+  × numpy 1.26/2.x), with Windows covered under both documented
+  toolchains (conda flang + MSVC, and mingw-w64 gfortran).
 
 ### Benchmarks vs the pristine upstream code
 
