@@ -195,8 +195,8 @@ method and implementation:
 
 and acknowledge the BHMIE implementation by Thomas P. Robitaille
 (https://github.com/hyperion-rt/bhmie), which extends the original
-program with modifications by B. T. Draine. An acknowledgment of
-bhmiepy itself is welcome but not required.
+program with modifications by B. T. Draine. Alongside these, an
+acknowledgment of bhmiepy itself is also warmly welcomed.
 
 ## Credits and licenses
 
