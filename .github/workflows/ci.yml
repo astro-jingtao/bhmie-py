@@ -173,11 +173,22 @@ jobs:
             # alone leaves libwinpthread dynamic; the -Bstatic pair
             # wraps just that one library.)
             export FFLAGS="-static-libgfortran -static-libgcc"
-            # NOTE: the -Wl,-Bstatic / -lwinpthread / -Wl,-Bdynamic trio
-            # MUST be three separate arguments -- nesting a -Wl inside a
-            # single -Wl,... comma list passes a literal "-Wl" to ld and
-            # breaks every link (cost us one CI round to find out).
-            export LDFLAGS="-static-libgfortran -static-libgcc -static-libquadmath -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic"
+            # NOTE 1: the -Wl,-Bstatic ... -Wl,-Bdynamic tokens MUST be
+            # separate arguments -- nesting a -Wl inside a single
+            # -Wl,... comma list passes a literal "-Wl" to ld and breaks
+            # every link (cost us one CI round to find out).
+            # NOTE 2: -static-libgfortran alone is NOT enough: meson
+            # links the mixed C+Fortran extension with the gcc driver
+            # and injects -lgfortran itself, which resolves to the
+            # dynamic import lib -- so libgfortran must be wrapped in
+            # our own -Bstatic block too (CPython >= 3.8 does not
+            # resolve extension DLL deps from PATH, so any dynamic
+            # Fortran runtime DLL makes the .pyd unloadable). The
+            # dev-only bhmie_ref.exe still links libquadmath and
+            # libwinpthread dynamically (gfortran appends them after
+            # the wrap); that is fine -- it only ever runs where the
+            # mingw toolchain is on PATH (CI, dev machines).
+            export LDFLAGS="-static-libgfortran -static-libgcc -static-libquadmath -Wl,-Bstatic -lgfortran -lquadmath -lwinpthread -Wl,-Bdynamic"
             gfortran --version | head -n 1
             gcc --version | head -n 1
           fi
