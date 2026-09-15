@@ -7,6 +7,25 @@ py_mod = import('python')
 py = py_mod.find_installation(pure: false)
 py_dep = py.dependency()
 
+# Keep floating-point evaluation strictly in source order so the package's
+# optimized BHMIE copy and the pristine upstream copy (compiled into the
+# same extension) stay bit-identical -- the slow upstream-equivalence tests
+# and benchmarks/bench_upstream.py assert exact equality. gfortran defaults
+# to -ffp-contract=fast, and on architectures where FMA is a baseline
+# instruction (macOS arm64) it contracts a*b+c in one translation unit but
+# not in the other, so the two copies drift apart by ~1 ULP. Generic x86-64
+# codegen has no baseline FMA, so this is a no-op on Linux gfortran and
+# Windows flang builds. Scoped by compiler id: -ffp-contract is
+# gfortran/flang-only syntax (classic flang and other compilers reject it).
+fc = meson.get_compiler('fortran')
+strict_fp_args = []
+if fc.get_id() == 'gcc' or fc.get_id() == 'llvm-flang'
+  strict_fp_args = ['-ffp-contract=off']
+endif
+if strict_fp_args.length() > 0
+  add_project_arguments(strict_fp_args, language : 'fortran')
+endif
+
 incdir_numpy = run_command(py,
   ['-c', 'import numpy; print(numpy.get_include())'],
   check : true
@@ -94,7 +113,6 @@ else
   # (see comment at the executable below); gfortran rejects -mllvm outright,
   # so scope the flag to the llvm-flang compiler id (meson calls classic
   # flang 'flang' and gfortran 'gcc').
-  fc = meson.get_compiler('fortran')
   upstream_ref_fortran_args = []
   if fc.get_id() == 'llvm-flang'
     upstream_ref_fortran_args = ['-mllvm', '--ignore-missing-type-desc']
@@ -105,8 +123,15 @@ else
     # arrays (s11..s34, sized by wavelengths x angles) on the stack; the
     # Windows default 1 MB stack overflows (0xC00000FD) where Linux's
     # 8 MB does not. Raise the stack reserve instead of touching the
-    # pristine sources.
-    upstream_ref_link_args = ['-Wl,/STACK:67108864']
+    # pristine sources. Syntax differs by linker: link.exe (flang/MSVC
+    # builds) takes /STACK, mingw ld (the Windows gfortran CI corner)
+    # takes --stack.
+    cc_link = meson.get_compiler('c')
+    if cc_link.get_argument_syntax() == 'msvc'
+      upstream_ref_link_args = ['-Wl,/STACK:67108864']
+    else
+      upstream_ref_link_args = ['-Wl,--stack,67108864']
+    endif
   endif
   executable(
     'bhmie_ref',

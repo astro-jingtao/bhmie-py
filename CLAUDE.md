@@ -83,8 +83,9 @@ The repository deliberately mixes code under two licenses:
   never commit it; README carries the general install instructions.
 - Editable install: run `scripts\dev-install.cmd` from the repo root. It
   chains vcvarsall + conda activate and sets the extra environment pieces
-  flang needs (`AR`/`RANLIB=llvm-*`, flang runtime dir on `LIB`,
-  `FFLAGS=-static-libflangrt`); the script header documents each one. Do not
+  flang needs (`CC`/`FC` pinned to `cl`/`flang-new`, `AR`/`RANLIB=llvm-*`,
+  flang runtime dir on `LIB`, `FFLAGS=-static-libflangrt`); the script
+  header documents each one. Do not
   inline this chain as a single `cmd /c '...'` line — `%LIB%` then expands
   before vcvarsall has run and breaks the MSVC library search.
 - Run tests: `scripts\test.cmd` (fast suite) / `scripts\test.cmd -m slow`
