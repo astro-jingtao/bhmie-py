@@ -185,9 +185,9 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then
             # Surface any remaining DLL dependency here, in the build
             # step, instead of as an opaque test-time ImportError.
-            if command -v ldd >/dev/null 2>&1; then
-              ldd "$(ls build/*/_bhmiepy_ext*.pyd | head -n 1)" || true
-            fi
+            # (ldd is not available in Git Bash; pe_imports.py is a
+            # dependency-free PE import-table dumper.)
+            python .github/scripts/pe_imports.py build/*/_bhmiepy_ext*.pyd || true
             python -c "import bhmiepy"
           fi
 
