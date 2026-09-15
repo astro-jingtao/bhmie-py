@@ -113,6 +113,12 @@ The repository deliberately mixes code under two licenses:
 - Build system: meson + meson-python + f2py. The only file f2py parses is
   `src/bhmiepy/_fortran/bhmiepy_ext.f90` (the Python-facing wrapper); other
   Fortran files are compiled directly by meson.
+- For any work on the build system, the Windows flang toolchain, or the
+  CI matrix, consult the global skill `f2py-meson-flang-windows`
+  (deployed from the agent_skill library; it grew out of this project's
+  bring-up and encodes the verified recipes: dev-install.cmd
+  environment tweaks, meson.build wiring rules, the failure-mode
+  catalogue, and the three-lane GitHub Actions matrix).
 - Tests: pytest, class-based style, lightweight and fast. Reference data for
   validation comes from `upstream/examples/` and from the vendored F77
   oracle `src/bhmiepy/_fortran/ref/bhmie_f77.f` (copied from
