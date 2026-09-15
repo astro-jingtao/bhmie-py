@@ -30,12 +30,38 @@ jobs:
           - python-version: '3.13'
             numpy: '1.26'
         include:
-          # Experimental corner: build with the runner image's MSYS2
-          # mingw gfortran (gcc + gfortran, plain pip deps, no
-          # MSVC/micromamba). Guards the "pip install from sdist with
-          # mingw on PATH" user path while no wheels are published.
+          # Experimental corners: build with the runner image's mingw
+          # gfortran (gcc + gfortran, plain pip deps, no MSVC/micromamba),
+          # mirroring the Windows flang cells one for one. Guards the
+          # "pip install from sdist with mingw on PATH" user path while
+          # no wheels are published. Still continue-on-error until the
+          # recipe goes green end-to-end.
+          - os: windows-latest
+            python-version: '3.10'
+            numpy: '1.26'
+            fortran: 'gfortran'
+          - os: windows-latest
+            python-version: '3.10'
+            numpy: '2'
+            fortran: 'gfortran'
+          - os: windows-latest
+            python-version: '3.11'
+            numpy: '1.26'
+            fortran: 'gfortran'
+          - os: windows-latest
+            python-version: '3.11'
+            numpy: '2'
+            fortran: 'gfortran'
           - os: windows-latest
             python-version: '3.12'
+            numpy: '1.26'
+            fortran: 'gfortran'
+          - os: windows-latest
+            python-version: '3.12'
+            numpy: '2'
+            fortran: 'gfortran'
+          - os: windows-latest
+            python-version: '3.13'
             numpy: '2'
             fortran: 'gfortran'
     defaults:
@@ -147,7 +173,11 @@ jobs:
             # alone leaves libwinpthread dynamic; the -Bstatic pair
             # wraps just that one library.)
             export FFLAGS="-static-libgfortran -static-libgcc"
-            export LDFLAGS="-static-libgfortran -static-libgcc -static-libquadmath -Wl,-Bstatic,-lwinpthread,-Wl,-Bdynamic"
+            # NOTE: the -Wl,-Bstatic / -lwinpthread / -Wl,-Bdynamic trio
+            # MUST be three separate arguments -- nesting a -Wl inside a
+            # single -Wl,... comma list passes a literal "-Wl" to ld and
+            # breaks every link (cost us one CI round to find out).
+            export LDFLAGS="-static-libgfortran -static-libgcc -static-libquadmath -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic"
             gfortran --version | head -n 1
             gcc --version | head -n 1
           fi
