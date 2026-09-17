@@ -23,7 +23,7 @@ parameters.
 ## Installation
 
 **bhmiepy is not on PyPI yet** — install from a source checkout. Besides
-Python >= 3.10 you need a C and a Fortran compiler; numpy, meson-python,
+Python >= 3.9 you need a C and a Fortran compiler; numpy, meson-python,
 and ninja are pulled in automatically as build requirements, so a plain
 `pip install .` is all it takes once the compilers are set up.
 

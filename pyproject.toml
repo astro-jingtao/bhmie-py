@@ -9,7 +9,7 @@ description = "Python interface to the BHMie Mie scattering code"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Tao Jing", email = "tao.jing.astro@gmail.com" }]
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = ["numpy>=1.26"]
 keywords = ["mie", "scattering", "astronomy", "dust", "fortran", "f2py"]
 classifiers = [

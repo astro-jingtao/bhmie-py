@@ -16,6 +16,16 @@ development finished; no version has been tagged or published yet, so
 
 ## [Unreleased]
 
+### Changed
+
+- Python support extended down to 3.9 (`requires-python >=3.9`): all
+  runtime annotations are lazy (`from __future__ import annotations`)
+  and no 3.10-only constructs are used; the full suite (fast + slow)
+  passes on 3.9.18 / numpy 1.26 with a mingw-gfortran editable build.
+  CI matrix extended with 3.9 cells (all OSes; on py3.9 the
+  `numpy>=2,<3` cell resolves to numpy 2.0.x, the last 3.9-compatible
+  release).
+
 ## [0.2.0] — 2026-09-15
 
 Phase 2 (dust populations) plus publication-readiness work.

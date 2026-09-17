@@ -14,7 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        # 3.9 added 2026-09-18 alongside the requires-python relaxation
+        # (>=3.9): the oldest supported interpreter is exercised in CI,
+        # not just declared. On py3.9 the 'numpy>=2,<3' cell resolves to
+        # numpy 2.0.x (2.1 dropped 3.9), which is the intended boundary.
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
         numpy: ['1.26', '2']
         # Windows-only toolchain selector. The single-value 'flang'
         # dimension is REQUIRED for the gfortran include below to add a
@@ -32,6 +36,14 @@ jobs:
           # install path documented in the README while no wheels are
           # published. Blocking coverage since the recipe went green
           # end-to-end (2026-09-15, run 6).
+          - os: windows-latest
+            python-version: '3.9'
+            numpy: '1.26'
+            fortran: 'gfortran'
+          - os: windows-latest
+            python-version: '3.9'
+            numpy: '2'
+            fortran: 'gfortran'
           - os: windows-latest
             python-version: '3.10'
             numpy: '1.26'
