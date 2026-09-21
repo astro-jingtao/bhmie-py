@@ -150,15 +150,6 @@ tests read fixtures from `upstream/examples/`, so run
 `git submodule update --init --recursive` before `pytest` (the already
 installed package does not need rebuilding for it).
 
-The `upstream/` submodule provides refractive-index tables, recorded
-reference outputs, and the sources for the optional `bhmie_ref`
-executable (built automatically when the submodule is present;
-`-Dupstream_ref=disabled` skips it). A plain `pip install .` also works
-without the submodule — the reference build is simply skipped — but two
-fast parameter-file tests read fixtures from `upstream/examples/`, so
-run the one-line submodule command above before `pytest` (the already
-installed package does not need rebuilding for it).
-
 ## Usage — single spheres
 
 ```python
@@ -239,10 +230,16 @@ Two independent A/B benchmarks (both separate from the pytest suite):
 - `benchmarks/bench_upstream.py` — core routine: the package's optimized
   BHMIE copy vs a verbatim upstream copy compiled into the same extension.
   On a dust-shaped workload (2400 size x wavelength points) the results
-  are bitwise identical and the package copy shows no measurable
-  performance degradation; any speedup is compiler-dependent — parity
-  with gfortran, ~2-3x with LLVM flang (whose codegen is more sensitive
-  to the upstream copy's fixed 16 MB per-call workspace).
+  are bitwise identical and the package copy never trails the pristine
+  one. The measured speedup is compiler-dependent — parity with gfortran,
+  ~2-3x with LLVM flang — and the flang figure means a *slow baseline*,
+  not fast flang codegen: in one same-machine comparison (flang 23 vs
+  gfortran 15) the pristine upstream source itself compiled ~2.4x slower
+  under flang, while the package copy ran at parity on both compilers.
+  The modifications (sized workspace instead of the fixed 16 MB per-call
+  allocation, heap instead of stack for the nang-sized automatic arrays)
+  remove a flang-specific weakness of the upstream baseline; they do not
+  make bhmiepy exceptionally fast under flang.
 - `benchmarks/bench_dust_upstream.py` — dust pipeline (Phase 2): the
   library vs the upstream CLI itself (`bhmie_ref`), built verbatim from
   the `upstream/` submodule by meson (`-Dupstream_ref`, auto-enabled when
