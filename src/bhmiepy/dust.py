@@ -257,7 +257,10 @@ class DustResult:
     """Size-distribution-averaged dust properties per wavelength.
 
     cext/csca/cback: cross-sections in cm^2 (per normalized particle mix);
-    kappa_ext: extinction opacity in cm^2/g including gas via gas_to_dust;
+    kappa_ext: extinction opacity in cm^2/g per unit total (gas+dust) mass,
+    i.e. kappa_dust / (1 + gas_to_dust) as in the upstream CLI -- the
+    kappa_ext_per_dust / kappa_ext_per_gas properties re-express it on the
+    other mass bases without recomputing;
     g: <cos(theta)>; s11/s12/s33/s34: scattering matrix elements with shape
     (nwav, 2*(n_angles+n_small_angles)-1) on the mirrored 0..pi grid."""
 
@@ -272,6 +275,10 @@ class DustResult:
     s12: np.ndarray
     s33: np.ndarray
     s34: np.ndarray
+    # no default on purpose: gas_to_dust is required to interpret every
+    # derived mass basis, and a plausible default would turn a missing
+    # argument into a silently wrong kappa_ext_per_dust / _per_gas
+    gas_to_dust: float
 
     @property
     def albedo(self) -> np.ndarray:
@@ -287,6 +294,31 @@ class DustResult:
         """-S12/S11 at 90 degrees (upstream summary's last column)."""
         i90 = (len(self.angles) - 1) // 2  # index of pi/2 in the mirrored grid
         return -self.s12[:, i90] / self.s11[:, i90]
+
+    @property
+    def kappa_ext_per_total(self) -> np.ndarray:
+        """kappa_ext under its defining normalization: per unit total
+        (gas+dust) mass, kappa_dust / (1 + gas_to_dust). Explicit alias of
+        ``kappa_ext`` (the upstream CLI convention)."""
+        return self.kappa_ext
+
+    @property
+    def kappa_ext_per_dust(self) -> np.ndarray:
+        """Extinction opacity per unit dust mass, cm^2/g:
+        kappa_ext * (1 + gas_to_dust)."""
+        return self.kappa_ext * (1.0 + self.gas_to_dust)
+
+    @property
+    def kappa_ext_per_gas(self) -> np.ndarray:
+        """Extinction opacity per unit gas mass, cm^2/g:
+        kappa_ext * (1 + gas_to_dust) / gas_to_dust; requires
+        gas_to_dust > 0."""
+        if self.gas_to_dust <= 0.0:
+            raise ValueError(
+                "kappa_ext_per_gas requires gas_to_dust > 0 (result was "
+                f"computed with gas_to_dust={self.gas_to_dust})"
+            )
+        return self.kappa_ext * (1.0 + self.gas_to_dust) / self.gas_to_dust
 
 
 def compute_dust_properties(
@@ -314,7 +346,10 @@ def compute_dust_properties(
     n_small_angles : int, optional
         Extra fine angles near 0 degrees (also mirrored near 180).
     gas_to_dust : float, optional
-        Gas-to-dust mass ratio for the opacity (0 for dust-only).
+        Gas-to-dust mass ratio setting the mass basis of ``kappa_ext``
+        (per gas+dust mass, as in the upstream CLI). The result records it
+        so ``kappa_ext_per_dust`` / ``kappa_ext_per_gas`` can re-express the
+        opacity on the other mass bases without recomputing.
 
     Returns
     -------
@@ -347,8 +382,10 @@ def compute_dust_properties(
     ...     n_angles=31, n_small_angles=3,
     ...     gas_to_dust=100.0,
     ... )
-    >>> round(float(res.kappa_ext[0]), 1)  # cm^2/g (incl. gas)
+    >>> round(float(res.kappa_ext[0]), 1)  # cm^2/g (per gas+dust mass)
     259.9
+    >>> round(float(res.kappa_ext_per_dust[0]), 1)  # per dust mass
+    26249.8
     >>> round(float(res.albedo[0]), 4)
     0.3894
 
@@ -508,6 +545,7 @@ def compute_dust_properties(
         s12=np.ascontiguousarray(s12),
         s33=np.ascontiguousarray(s33),
         s34=np.ascontiguousarray(s34),
+        gas_to_dust=gas_to_dust,
     )
 
 

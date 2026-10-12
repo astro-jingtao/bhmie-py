@@ -197,7 +197,10 @@ res = dust.compute_dust_properties(
     n_angles=181, n_small_angles=10,
     gas_to_dust=141.84,
 )
-res.kappa_ext   # extinction opacity, cm^2/g (incl. gas)
+res.kappa_ext           # extinction opacity, cm^2/g per gas+dust mass
+res.kappa_ext_per_total # explicit alias of kappa_ext (its defining basis)
+res.kappa_ext_per_dust  # same physics, per dust mass (no recomputation)
+res.kappa_ext_per_gas   # same physics, per gas mass (gas_to_dust > 0)
 res.albedo, res.g, res.s11, res.s12, res.s33, res.s34, res.angles
 ```
 

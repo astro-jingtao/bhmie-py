@@ -1,6 +1,7 @@
 """Tests for the Phase 2 dust pipeline (distributions, materials, ported
 log-log helpers, pipeline plumbing, and golden-data validation)."""
 
+import dataclasses
 from pathlib import Path
 
 import numpy as np
@@ -321,6 +322,69 @@ class TestDustPipelinePlumbing:
             np.testing.assert_allclose(
                 getattr(split, name), getattr(single, name), rtol=1e-13,
                 err_msg=name,
+            )
+
+
+class TestKappaMassBasis:
+    """kappa_ext mass-basis conversions on DustResult (per total/dust/gas)."""
+
+    def _compute(self, gas_to_dust):
+        comp = dust.Component(
+            dust.Material(np.array([0.3, 5.0]), np.array([1.5 + 0.01j, 1.5 + 0.01j])),
+            dust.PowerLaw(0.01, 0.1, -3.5),
+            1.0,
+            3.0,
+        )
+        return dust.compute_dust_properties(
+            [comp], [0.5, 1.0], 0.01, 0.1, 5, 5, 0, gas_to_dust=gas_to_dust
+        )
+
+    def test_result_records_gas_to_dust(self):
+        assert self._compute(41.2).gas_to_dust == 41.2
+
+    def test_basis_identities(self):
+        res = self._compute(100.0)
+        np.testing.assert_allclose(res.kappa_ext_per_total, res.kappa_ext, rtol=0)
+        np.testing.assert_allclose(
+            res.kappa_ext_per_total * (1.0 + 100.0), res.kappa_ext_per_dust, rtol=1e-15
+        )
+        np.testing.assert_allclose(
+            res.kappa_ext_per_gas * 100.0, res.kappa_ext_per_dust, rtol=1e-15
+        )
+
+    def test_per_dust_matches_dust_only_computation(self):
+        # the conversion must agree with actually computing at gas_to_dust=0
+        # (a roundtrip through kappa_dust/(1+G)*(1+G): ulp-level, so
+        # tolerant, not bit-identical by construction)
+        np.testing.assert_allclose(
+            self._compute(100.0).kappa_ext_per_dust,
+            self._compute(0.0).kappa_ext,
+            rtol=1e-12,
+        )
+
+    def test_zero_gas_to_dust(self):
+        # total mass == dust mass when there is no gas, so per_dust equals
+        # the stored kappa_ext exactly; per_gas is undefined and fails loudly
+        res = self._compute(0.0)
+        np.testing.assert_allclose(res.kappa_ext_per_dust, res.kappa_ext, rtol=0)
+        with pytest.raises(ValueError, match="gas_to_dust > 0"):
+            res.kappa_ext_per_gas
+
+    def test_manual_result_negative_gas_to_dust_rejected(self):
+        # a hand-built DustResult with a meaningless ratio must not silently
+        # produce a negative-opacity "per gas" array
+        res = self._compute(100.0)
+        with pytest.raises(ValueError, match="gas_to_dust > 0"):
+            dataclasses.replace(res, gas_to_dust=-1.0).kappa_ext_per_gas
+
+    def test_gas_to_dust_is_required(self):
+        # constructing a result without gas_to_dust must fail loudly: a
+        # plausible default would silently mislabel every derived basis
+        with pytest.raises(TypeError, match="gas_to_dust"):
+            dust.DustResult(
+                wavelengths=None, angles=None, cext=None, csca=None,
+                cback=None, kappa_ext=None, g=None, s11=None, s12=None,
+                s33=None, s34=None,
             )
 
 
